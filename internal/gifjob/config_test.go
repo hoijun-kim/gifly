@@ -31,10 +31,20 @@ func TestImagesConfigValidate(t *testing.T) {
 	if err := ok.Validate(); err != nil {
 		t.Fatalf("valid config rejected: %v", err)
 	}
-	if err := (ImagesConfig{Inputs: nil, FrameMS: 100, Width: 400, Quality: DefaultQuality()}).Validate(); err == nil {
-		t.Error("empty image list: want an error")
+	bad := []struct {
+		name string
+		c    ImagesConfig
+	}{
+		{"empty image list", ImagesConfig{Inputs: nil, FrameMS: 100, Width: 400, Quality: DefaultQuality()}},
+		{"zero frame duration", ImagesConfig{Inputs: []string{"a.png"}, FrameMS: 0, Width: 400, Quality: DefaultQuality()}},
+		{"zero width", ImagesConfig{Inputs: []string{"a.png"}, FrameMS: 100, Width: 0, Quality: DefaultQuality()}},
+		{"loop below once", ImagesConfig{Inputs: []string{"a.png"}, FrameMS: 100, Width: 400, Loop: -2, Quality: DefaultQuality()}},
+		{"colors too low", ImagesConfig{Inputs: []string{"a.png"}, FrameMS: 100, Width: 400, Quality: Quality{MaxColors: 1}}},
+		{"colors too high", ImagesConfig{Inputs: []string{"a.png"}, FrameMS: 100, Width: 400, Quality: Quality{MaxColors: 300}}},
 	}
-	if err := (ImagesConfig{Inputs: []string{"a.png"}, FrameMS: 0, Width: 400, Quality: DefaultQuality()}).Validate(); err == nil {
-		t.Error("zero frame duration: want an error")
+	for _, b := range bad {
+		if err := b.c.Validate(); err == nil {
+			t.Errorf("%s: Validate() = nil, want an error", b.name)
+		}
 	}
 }
