@@ -11,7 +11,7 @@ func TestVideoArgsTwoPass(t *testing.T) {
 	p1, p2 := VideoArgs(c, "pal.png", "out.gif")
 
 	want1 := []string{
-		"-y", "-ss", "1.000", "-i", "in.mp4", "-t", "2.500",
+		"-y", "-ss", "1.000", "-t", "2.500", "-i", "in.mp4",
 		"-vf", "fps=15,scale=480:-2:flags=lanczos,palettegen=max_colors=128:stats_mode=diff",
 		"pal.png",
 	}
@@ -19,7 +19,7 @@ func TestVideoArgsTwoPass(t *testing.T) {
 		t.Errorf("pass1 =\n%v\nwant\n%v", p1, want1)
 	}
 	want2 := []string{
-		"-y", "-ss", "1.000", "-i", "in.mp4", "-t", "2.500", "-i", "pal.png",
+		"-y", "-ss", "1.000", "-t", "2.500", "-i", "in.mp4", "-i", "pal.png",
 		"-lavfi", "fps=15,scale=480:-2:flags=lanczos[x];[x][1:v]paletteuse=dither=sierra2_4a",
 		"-loop", "0", "out.gif",
 	}
@@ -37,6 +37,15 @@ func TestVideoArgsDitherOffAndLoopOnce(t *testing.T) {
 	}
 	if !strings.Contains(joined, "-loop -1") {
 		t.Errorf("LoopOnce should produce -loop -1: %s", joined)
+	}
+}
+
+func TestVideoArgsPositiveLoop(t *testing.T) {
+	c := VideoConfig{Input: "in.mp4", StartMS: 0, EndMS: 1000, FPS: 10, Width: 320, Loop: LoopMode(5), Quality: Quality{MaxColors: 256, Dither: true}}
+	_, p2 := VideoArgs(c, "pal.png", "out.gif")
+	joined := strings.Join(p2, " ")
+	if !strings.Contains(joined, "-loop 5") {
+		t.Errorf("positive loop count should produce -loop 5: %s", joined)
 	}
 }
 

@@ -43,12 +43,12 @@ func VideoArgs(c VideoConfig, palettePath, outPath string) (pass1, pass2 []strin
 	fps := strconv.Itoa(c.FPS)
 
 	pass1 = []string{
-		"-y", "-ss", start, "-i", c.Input, "-t", dur,
+		"-y", "-ss", start, "-t", dur, "-i", c.Input,
 		"-vf", "fps=" + fps + "," + palettegen(c.Width, c.Quality),
 		palettePath,
 	}
 	pass2 = []string{
-		"-y", "-ss", start, "-i", c.Input, "-t", dur, "-i", palettePath,
+		"-y", "-ss", start, "-t", dur, "-i", c.Input, "-i", palettePath,
 		"-lavfi", "fps=" + fps + "," + paletteuse(c.Width, c.Quality),
 		"-loop", strconv.Itoa(int(c.Loop)), outPath,
 	}
