@@ -17,6 +17,8 @@ func TestParseLoop(t *testing.T) {
 		{"3", gifjob.LoopMode(3), false},
 		{"-2", 0, true},
 		{"nope", 0, true},
+		{"0", gifjob.LoopMode(0), false},
+		{"-1", 0, true},
 	}
 	for _, c := range cases {
 		got, err := parseLoop(c.in)
