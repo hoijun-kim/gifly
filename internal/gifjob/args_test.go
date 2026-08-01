@@ -79,3 +79,15 @@ func TestImagesArgsAndConcatList(t *testing.T) {
 		t.Errorf("concat list =\n%q\nwant\n%q", b.String(), want)
 	}
 }
+
+func TestWriteConcatListEscapesQuotes(t *testing.T) {
+	inputs := []string{"a'b.png", "c'd.png"}
+	var b strings.Builder
+	if err := WriteConcatList(&b, inputs, 100); err != nil {
+		t.Fatal(err)
+	}
+	want := "file 'a'\\''b.png'\nduration 0.100\nfile 'c'\\''d.png'\nduration 0.100\nfile 'c'\\''d.png'\n"
+	if b.String() != want {
+		t.Errorf("concat list with quotes =\n%q\nwant\n%q", b.String(), want)
+	}
+}

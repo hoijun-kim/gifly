@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 )
 
 // secs formats a millisecond count as fixed-point seconds with millisecond
@@ -72,6 +73,14 @@ func ImagesArgs(c ImagesConfig, listPath, palettePath, outPath string) (pass1, p
 	return pass1, pass2
 }
 
+// escapeConcatPath escapes single quotes in a path for the ffmpeg concat demuxer.
+// Each single quote is replaced by the four-character sequence quote, backslash,
+// quote, quote: it closes the single-quoted string, adds a backslash-escaped
+// quote, then reopens the string.
+func escapeConcatPath(p string) string {
+	return strings.ReplaceAll(p, "'", "'\\''")
+}
+
 // WriteConcatList writes the concat-demuxer script: each frame with its duration
 // in seconds, and the final frame repeated because the concat demuxer ignores
 // the last entry's duration (without the repeat, the last frame flashes for one
@@ -79,12 +88,12 @@ func ImagesArgs(c ImagesConfig, listPath, palettePath, outPath string) (pass1, p
 func WriteConcatList(w io.Writer, inputs []string, frameMS int) error {
 	dur := secs(int64(frameMS))
 	for _, in := range inputs {
-		if _, err := fmt.Fprintf(w, "file '%s'\nduration %s\n", in, dur); err != nil {
+		if _, err := fmt.Fprintf(w, "file '%s'\nduration %s\n", escapeConcatPath(in), dur); err != nil {
 			return err
 		}
 	}
 	if len(inputs) > 0 {
-		if _, err := fmt.Fprintf(w, "file '%s'\n", inputs[len(inputs)-1]); err != nil {
+		if _, err := fmt.Fprintf(w, "file '%s'\n", escapeConcatPath(inputs[len(inputs)-1])); err != nil {
 			return err
 		}
 	}
