@@ -83,3 +83,12 @@ func Run(ctx context.Context, bin string, args []string, onProgress func(Progres
 	}
 	return nil
 }
+
+// RunnerFunc adapts the package-level Run into an interface value the gifjob
+// orchestrator can accept, so tests can substitute a fake that records argv and
+// never launches a process.
+type RunnerFunc func(ctx context.Context, bin string, args []string, onProgress func(Progress)) error
+
+func (f RunnerFunc) Run(ctx context.Context, bin string, args []string, onProgress func(Progress)) error {
+	return f(ctx, bin, args, onProgress)
+}
