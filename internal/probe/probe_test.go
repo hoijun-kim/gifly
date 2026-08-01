@@ -12,6 +12,7 @@ import (
 // A trimmed but real-shaped ffprobe JSON dump for one video stream.
 const probeJSON = `{
   "streams": [
+    {"codec_type": "audio", "width": 0, "height": 0, "avg_frame_rate": "0/0"},
     {"codec_type": "video", "width": 1920, "height": 1080, "avg_frame_rate": "30000/1001"}
   ],
   "format": {"duration": "12.500000"}
@@ -31,6 +32,20 @@ func TestParseProbeJSON(t *testing.T) {
 	// 30000/1001 = 29.97
 	if m.FPS < 29.9 || m.FPS > 30.0 {
 		t.Errorf("FPS = %v, want ~29.97", m.FPS)
+	}
+}
+
+func TestParseProbeJSONNoVideoStream(t *testing.T) {
+	// Fixture with only an audio stream, no video stream.
+	noVideoJSON := `{
+  "streams": [
+    {"codec_type": "audio", "width": 0, "height": 0, "avg_frame_rate": "0/0"}
+  ],
+  "format": {"duration": "10.000000"}
+}`
+	_, err := parseProbeJSON([]byte(noVideoJSON))
+	if err == nil {
+		t.Fatal("parseProbeJSON with no video stream should return an error")
 	}
 }
 
