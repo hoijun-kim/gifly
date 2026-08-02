@@ -17,6 +17,7 @@ type App struct {
 	mu          sync.Mutex
 	cancelFn    context.CancelFunc
 	previewPath string
+	ready       bool
 }
 
 // NewApp constructs the App.
@@ -24,7 +25,12 @@ func NewApp() *App { return &App{} }
 
 // Startup captures the Wails runtime context (bound in main.go's OnStartup). It
 // is exported because Wails' OnStartup requires an accessible method value.
-func (a *App) Startup(ctx context.Context) { a.ctx = ctx }
+func (a *App) Startup(ctx context.Context) {
+	a.ctx = ctx
+	a.mu.Lock()
+	a.ready = true
+	a.mu.Unlock()
+}
 
 // toolsOrErr resolves the ffmpeg and ffprobe binaries, shared by the pickers.
 func (a *App) toolsOrErr() (ffmpeg.Paths, error) {

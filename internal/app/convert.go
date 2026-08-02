@@ -124,7 +124,10 @@ func (a *App) emitProgress(phase string, pct int) {
 			log.Printf("gifly: progress emit recovered: %v", r)
 		}
 	}()
-	if a.ctx != nil {
+	a.mu.Lock()
+	ready := a.ready
+	a.mu.Unlock()
+	if ready {
 		runtime.EventsEmit(a.ctx, "convert:progress", ProgressEvent{Phase: phase, Percent: pct})
 	}
 }
