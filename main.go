@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"log"
 
 	"github.com/hoijun-kim/gifly/internal/app"
 	"github.com/wailsapp/wails/v2"
@@ -14,7 +15,7 @@ var assets embed.FS
 
 func main() {
 	a := app.NewApp()
-	_ = wails.Run(&options.App{
+	if err := wails.Run(&options.App{
 		Title:       "gifly",
 		Width:       720,
 		Height:      620,
@@ -24,5 +25,7 @@ func main() {
 		AssetServer: &assetserver.Options{Assets: assets},
 		OnStartup:   a.Startup,
 		Bind:        []interface{}{a},
-	})
+	}); err != nil {
+		log.Fatal(err)
+	}
 }
