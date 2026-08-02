@@ -12,7 +12,8 @@ import (
 
 // App is the Wails-bound application object.
 type App struct {
-	ctx context.Context
+	ctx      context.Context
+	cancelFn context.CancelFunc
 }
 
 // NewApp constructs the App.
