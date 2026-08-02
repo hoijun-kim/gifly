@@ -94,56 +94,38 @@ body {
   height: 100vh;
 }
 
-.titlebar {
-  display: flex;
-  align-items: center;
-  height: 40px;
-  padding: 0 12px;
-  flex: 0 0 auto;
-  background: var(--panel);
-  border-bottom: 1px solid var(--line);
-  /* Lets the frameless window be dragged by its title bar. */
-  --wails-draggable: drag;
+/* Every measured number (fps, px, mm:ss, bytes) is data: mono, tabular. */
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 
-.titlebar-wordmark {
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--accent-hi);
-}
-
-.shell {
+/* The one centered working column, under the title bar. TitleBar.svelte and
+   ModeSwitch.svelte own their own layout; this is what the active mode
+   (Video.svelte / Images.svelte, Tasks 6-7) fills. */
+.work {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 24px;
+  align-items: stretch;
+  gap: 16px;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 24px 28px;
+  overflow-y: auto;
+  min-height: 0;
 }
 
-.shell h1 {
-  margin: 0;
-  font-size: 2rem;
-  color: var(--text);
-}
-
-.shell .tagline {
-  margin: 0;
-  color: var(--muted);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .shell {
-    animation: shell-in 200ms ease-out;
-  }
-}
-
-@keyframes shell-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
+/* Global safety net: honour the OS-level reduced-motion preference even for
+   any animation/transition a component forgets to gate individually. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }
