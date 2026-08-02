@@ -3,7 +3,7 @@
 // run against a real ffmpeg.
 //
 //	giflycli video -i in.mp4 -o out.gif -ss 1000 -to 3500 -fps 15 -w 480 [-loop forever] [-colors 256] [-nodither]
-//	giflycli images -o out.gif -ms 100 -w 400 [-loop forever] a.png b.png c.png
+//	giflycli images -o out.gif -ms 100 -w 400 [-h N] [-loop forever] a.png b.png c.png
 package main
 
 import (

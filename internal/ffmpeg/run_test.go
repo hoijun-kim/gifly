@@ -57,17 +57,23 @@ func TestHelperProcess(t *testing.T) {
 	os.Exit(0)
 }
 
-// helperRun re-execs this test binary as TestHelperProcess and drives it through
-// runArgs (NOT Run - the global ffmpeg flags would be rejected as test flags).
-func helperRun(ctx context.Context, mode string, onProgress func(Progress)) error {
-	os.Setenv("GIFLY_HELPER_WANTED", "1")
-	os.Setenv("GIFLY_HELPER_MODE", mode)
-	return runArgs(ctx, os.Args[0], []string{"-test.run=TestHelperProcess", "--"}, onProgress)
+// setHelper points the re-exec at TestHelperProcess in the given mode, using
+// t.Setenv so the env is restored automatically after the test.
+func setHelper(t *testing.T, mode string) {
+	t.Setenv("GIFLY_HELPER_WANTED", "1")
+	t.Setenv("GIFLY_HELPER_MODE", mode)
+}
+
+// helperArgs returns the re-exec path and args for TestHelperProcess.
+func helperArgs() (string, []string) {
+	return os.Args[0], []string{"-test.run=TestHelperProcess", "--"}
 }
 
 func TestRunReportsProgressAndSucceeds(t *testing.T) {
+	setHelper(t, "progress-then-ok")
+	bin, args := helperArgs()
 	var last Progress
-	if err := helperRun(context.Background(), "progress-then-ok", func(p Progress) { last = p }); err != nil {
+	if err := runArgs(context.Background(), bin, args, func(p Progress) { last = p }); err != nil {
 		t.Fatalf("runArgs = %v, want success", err)
 	}
 	if last.OutTimeMS != 1000 || !last.Done {
@@ -76,7 +82,9 @@ func TestRunReportsProgressAndSucceeds(t *testing.T) {
 }
 
 func TestRunSurfacesStderrTailOnFailure(t *testing.T) {
-	err := helperRun(context.Background(), "fail-with-stderr", nil)
+	setHelper(t, "fail-with-stderr")
+	bin, args := helperArgs()
+	err := runArgs(context.Background(), bin, args, nil)
 	if err == nil {
 		t.Fatal("runArgs should fail on a non-zero exit")
 	}
@@ -86,9 +94,11 @@ func TestRunSurfacesStderrTailOnFailure(t *testing.T) {
 }
 
 func TestRunCancelKillsProcess(t *testing.T) {
+	setHelper(t, "hang")
+	bin, args := helperArgs()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- helperRun(ctx, "hang", nil) }()
+	go func() { done <- runArgs(ctx, bin, args, nil) }()
 	cancel()
 	select {
 	case err := <-done:
