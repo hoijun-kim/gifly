@@ -4,6 +4,7 @@
   // number crunching (timecodes, aspect math, validation) lives in
   // ../lib/format and ../lib/validate; this component just wires state to
   // the bound Go methods in ../lib/wails.
+  import { onDestroy } from "svelte";
   import { PickVideo, ConvertVideo, Cancel, RevealOutput, onProgress } from "../lib/wails";
   import type { VideoInfo, VideoRequest, ConvertResult } from "../lib/wails";
   import { msToTimecode, aspectHeight, humanBytes } from "../lib/format";
@@ -136,6 +137,14 @@
   function openFolder() {
     if (result) RevealOutput(result.Path);
   }
+
+  // Switching to Images mode unmounts this component (App.svelte's
+  // {#if $mode==='video'}), which would otherwise leave the convert:progress
+  // listener registered and an in-flight backend job running unmanaged.
+  onDestroy(() => {
+    if (stopProgress) stopProgress();
+    if (converting) Cancel();
+  });
 </script>
 
 <div class="video-mode">
