@@ -2,6 +2,7 @@ package gifjob
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -131,5 +132,49 @@ func TestRunImagesRejectsInvalidConfig(t *testing.T) {
 	}
 	if len(r.calls) != 0 {
 		t.Errorf("no ffmpeg call should happen for an invalid config, got %d", len(r.calls))
+	}
+}
+
+// failOnEncode is a runner that writes a partial output on the encode pass and
+// then reports failure, to prove RunVideo and RunImages remove the half-written file.
+type failOnEncode struct {
+	out       string
+	encodeIdx int
+	calls     int
+}
+
+func (r *failOnEncode) Run(_ context.Context, _ string, _ []string, _ func(ffmpeg.Progress)) error {
+	r.calls++
+	if r.calls == r.encodeIdx {
+		_ = os.WriteFile(r.out, []byte("partial"), 0o644)
+		return errors.New("ffmpeg failed mid-encode")
+	}
+	return nil
+}
+
+func TestRunVideoRemovesPartialOutputOnFailure(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "out.gif")
+	r := &failOnEncode{out: out, encodeIdx: 2} // video: palette(1), encode(2)
+	tools := ffmpeg.Paths{FFmpeg: "ffmpeg", FFprobe: "ffprobe"}
+	c := VideoConfig{Input: "in.mp4", StartMS: 0, EndMS: 1000, FPS: 10, Width: 320, Loop: LoopForever, Quality: DefaultQuality()}
+
+	if _, err := RunVideo(context.Background(), tools, r, c, out, nil); err == nil {
+		t.Fatal("RunVideo should return the encode error")
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Errorf("partial output %q was left behind after a failed encode", out)
+	}
+}
+
+func TestRunImagesRemovesPartialOutputOnFailure(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "out.gif")
+	r := &failOnEncode{out: out, encodeIdx: 4} // 2 normalize + palette + encode(4)
+	tools := ffmpeg.Paths{FFmpeg: "ffmpeg", FFprobe: "ffprobe"}
+	c := ImagesConfig{Inputs: []string{"a.png", "b.png"}, FrameMS: 100, Width: 320, Height: 240, Loop: LoopForever, Quality: DefaultQuality()}
+	if _, err := RunImages(context.Background(), tools, r, c, out, nil); err == nil {
+		t.Fatal("RunImages should return the encode error")
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Errorf("partial output %q was left behind after a failed encode", out)
 	}
 }

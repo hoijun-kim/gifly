@@ -57,6 +57,7 @@ func RunVideo(ctx context.Context, tools ffmpeg.Paths, r Runner, c VideoConfig, 
 		return Result{}, fmt.Errorf("palette pass: %w", err)
 	}
 	if err := r.Run(ctx, tools.FFmpeg, p2, onProgress); err != nil {
+		os.Remove(outPath)
 		return Result{}, fmt.Errorf("encode pass: %w", err)
 	}
 	return statResult(outPath)
