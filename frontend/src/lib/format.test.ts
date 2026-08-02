@@ -13,6 +13,8 @@ describe('format', () => {
   it('derives an even aspect height', () => {
     expect(aspectHeight(1600, 900, 800)).toBe(450);
     expect(aspectHeight(100, 101, 100)).toBe(102); // odd -> even
+    expect(aspectHeight(1000, 1, 1)).toBe(2); // round(1*1/1000)=0 -> clamped to 2
+    expect(aspectHeight(0, 0, 0)).toBe(2); // degenerate guard
   });
   it('formats bytes', () => {
     expect(humanBytes(1536)).toBe('1.5 KB');

@@ -15,6 +15,7 @@ export function frameMsFromFps(fps: number): number {
 }
 
 export function aspectHeight(srcW: number, srcH: number, outW: number): number {
+  if (srcW <= 0 || srcH <= 0 || outW <= 0) return 2;
   let h = Math.round((outW * srcH) / srcW);
   if (h < 2) h = 2;
   if (h % 2) h++; // if h is odd
