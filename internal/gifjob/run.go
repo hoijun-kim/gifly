@@ -62,46 +62,52 @@ func RunVideo(ctx context.Context, tools ffmpeg.Paths, r Runner, c VideoConfig, 
 	return statResult(outPath)
 }
 
-// RunImages is RunVideo's sibling for an ordered image set: it also writes a
-// temp concat list, and cleans both temp files up.
+// RunImages validates the config, normalizes every input frame onto the shared
+// c.Width by c.Height canvas (so a mixed-size set becomes uniform for the concat
+// demuxer), then runs the palette and encode passes. All temp files live in one
+// directory removed on every exit path; a failed encode also removes the partial
+// output.
 func RunImages(ctx context.Context, tools ffmpeg.Paths, r Runner, c ImagesConfig, outPath string, onProgress func(ffmpeg.Progress)) (Result, error) {
 	if err := c.Validate(); err != nil {
 		return Result{}, err
 	}
-	list, err := os.CreateTemp("", "gifly-*.txt")
+	tmp, err := os.MkdirTemp("", "gifly-imgs-*")
 	if err != nil {
 		return Result{}, err
 	}
-	listPath := list.Name()
-	defer os.Remove(listPath)
-	// Absolute paths so the list works regardless of ffmpeg's working dir.
-	abs := make([]string, len(c.Inputs))
+	defer os.RemoveAll(tmp)
+
+	norm := make([]string, len(c.Inputs))
 	for i, in := range c.Inputs {
+		abs := in
 		if a, err := filepath.Abs(in); err == nil {
-			abs[i] = a
-		} else {
-			abs[i] = in
+			abs = a
 		}
+		out := filepath.Join(tmp, fmt.Sprintf("f%04d.png", i))
+		if err := r.Run(ctx, tools.FFmpeg, NormalizeArgs(abs, out, c.Width, c.Height), nil); err != nil {
+			return Result{}, fmt.Errorf("normalizing frame %d: %w", i+1, err)
+		}
+		norm[i] = out
 	}
-	if err := WriteConcatList(list, abs, c.FrameMS); err != nil {
+
+	listPath := filepath.Join(tmp, "list.txt")
+	list, err := os.Create(listPath)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := WriteConcatList(list, norm, c.FrameMS); err != nil {
 		list.Close()
 		return Result{}, err
 	}
 	list.Close()
 
-	palette, err := os.CreateTemp("", "gifly-*.png")
-	if err != nil {
-		return Result{}, err
-	}
-	palettePath := palette.Name()
-	palette.Close()
-	defer os.Remove(palettePath)
-
+	palettePath := filepath.Join(tmp, "palette.png")
 	p1, p2 := ImagesArgs(c, listPath, palettePath, outPath)
 	if err := r.Run(ctx, tools.FFmpeg, p1, nil); err != nil {
 		return Result{}, fmt.Errorf("palette pass: %w", err)
 	}
 	if err := r.Run(ctx, tools.FFmpeg, p2, onProgress); err != nil {
+		os.Remove(outPath)
 		return Result{}, fmt.Errorf("encode pass: %w", err)
 	}
 	return statResult(outPath)
