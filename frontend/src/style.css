@@ -1,0 +1,149 @@
+/* Design tokens - dark (base). gifly's accent is a vivid violet, distinct
+   from the sibling tools (flip: teal, shape: orange, fleet: blue). */
+:root {
+  --bg: #14131a;
+  --panel: #1f1d29;
+  --panel-2: #2a2739;
+  --line: #35314a;
+  --text: #ece9f5;
+  --muted: #9a93b4;
+  --faint: #665f80;
+  --accent: #8b5cf6;
+  --accent-hi: #a78bfa;
+  --accent-ink: #140f26;
+  --accent-wash: rgba(139, 92, 246, 0.14);
+  --ok: #3fbf8f;
+  --warn: #e0a83a;
+  --stop: #f0655a;
+
+  --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+
+  --r: 8px;
+  --r-panel: 12px;
+}
+
+/* Light - follows the OS theme by default. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f5f3fb;
+    --panel: #ffffff;
+    --panel-2: #efecf7;
+    --line: #e0dcee;
+    --text: #191627;
+    --muted: #6a6484;
+    --faint: #9c95b4;
+    --accent: #7c3aed;
+    --accent-hi: #6d28d9;
+    --accent-ink: #ffffff;
+    --accent-wash: rgba(124, 58, 237, 0.1);
+  }
+}
+
+/* Explicit overrides (for a future in-app theme toggle) win over the OS
+   preference above, in either direction. */
+:root[data-theme="light"] {
+  --bg: #f5f3fb;
+  --panel: #ffffff;
+  --panel-2: #efecf7;
+  --line: #e0dcee;
+  --text: #191627;
+  --muted: #6a6484;
+  --faint: #9c95b4;
+  --accent: #7c3aed;
+  --accent-hi: #6d28d9;
+  --accent-ink: #ffffff;
+  --accent-wash: rgba(124, 58, 237, 0.1);
+}
+
+:root[data-theme="dark"] {
+  --bg: #14131a;
+  --panel: #1f1d29;
+  --panel-2: #2a2739;
+  --line: #35314a;
+  --text: #ece9f5;
+  --muted: #9a93b4;
+  --faint: #665f80;
+  --accent: #8b5cf6;
+  --accent-hi: #a78bfa;
+  --accent-ink: #140f26;
+  --accent-wash: rgba(139, 92, 246, 0.14);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 12px;
+  flex: 0 0 auto;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  /* Lets the frameless window be dragged by its title bar. */
+  --wails-draggable: drag;
+}
+
+.titlebar-wordmark {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent-hi);
+}
+
+.shell {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+}
+
+.shell h1 {
+  margin: 0;
+  font-size: 2rem;
+  color: var(--text);
+}
+
+.shell .tagline {
+  margin: 0;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .shell {
+    animation: shell-in 200ms ease-out;
+  }
+}
+
+@keyframes shell-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
