@@ -53,6 +53,9 @@ func (a *App) PickVideo() (VideoInfo, error) {
 
 // PickImages opens a multi-select dialog for image selection, then probes each file.
 func (a *App) PickImages() ([]ImageInfo, error) {
+	if _, err := a.toolsOrErr(); err != nil {
+		return nil, err
+	}
 	paths, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Select images",
 		Filters: []runtime.FileFilter{
