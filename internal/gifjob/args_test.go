@@ -91,3 +91,15 @@ func TestWriteConcatListEscapesQuotes(t *testing.T) {
 		t.Errorf("concat list with quotes =\n%q\nwant\n%q", b.String(), want)
 	}
 }
+
+func TestNormalizeArgs(t *testing.T) {
+	got := NormalizeArgs("in.png", "out.png", 400, 300)
+	want := []string{
+		"-y", "-i", "in.png",
+		"-vf", "scale=400:300:force_original_aspect_ratio=decrease,pad=400:300:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1",
+		"out.png",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("NormalizeArgs =\n%v\nwant\n%v", got, want)
+	}
+}

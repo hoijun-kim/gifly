@@ -99,3 +99,14 @@ func WriteConcatList(w io.Writer, inputs []string, frameMS int) error {
 	}
 	return nil
 }
+
+// NormalizeArgs builds the ffmpeg call that fits one source image inside a
+// w by h canvas (scaled down to preserve aspect, never up-cropped) and pads it
+// with black to exactly w by h. A set of differently-sized frames becomes
+// uniform this way, which the concat demuxer requires before it will read them.
+func NormalizeArgs(input, output string, w, h int) []string {
+	vf := fmt.Sprintf(
+		"scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1",
+		w, h, w, h)
+	return []string{"-y", "-i", input, "-vf", vf, output}
+}

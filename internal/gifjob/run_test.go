@@ -97,7 +97,7 @@ func TestRunImagesRunsBothPasses(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "out.gif")
 	r := &fakeRunner{out: out}
 	tools := ffmpeg.Paths{FFmpeg: "ffmpeg", FFprobe: "ffprobe"}
-	c := ImagesConfig{Inputs: []string{"a.png", "b.png"}, FrameMS: 100, Width: 320, Loop: LoopForever, Quality: DefaultQuality()}
+	c := ImagesConfig{Inputs: []string{"a.png", "b.png"}, FrameMS: 100, Width: 320, Height: 240, Loop: LoopForever, Quality: DefaultQuality()}
 
 	before := giflyTempFiles(t)
 	res, err := RunImages(context.Background(), tools, r, c, out, nil)
