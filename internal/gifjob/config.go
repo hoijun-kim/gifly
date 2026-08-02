@@ -4,7 +4,10 @@
 // flag is the likeliest defect and the hardest to see by eye.
 package gifjob
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // LoopMode is the literal ffmpeg -loop value for a GIF: 0 loops forever, -1
 // plays once, and any positive n loops n times.
@@ -43,6 +46,7 @@ type ImagesConfig struct {
 	Inputs  []string
 	FrameMS int
 	Width   int
+	Height  int
 	Loop    LoopMode
 	Quality Quality
 }
@@ -90,5 +94,27 @@ func (c ImagesConfig) Validate() error {
 	if c.FrameMS <= 0 {
 		return fmt.Errorf("frame duration must be positive, got %d ms", c.FrameMS)
 	}
+	if c.Height <= 0 {
+		return fmt.Errorf("canvas height must be positive, got %d", c.Height)
+	}
 	return validateShared(c.Width, c.Loop, c.Quality)
+}
+
+// CanvasHeight returns the even output height for an images GIF of width outW,
+// derived from the first frame's aspect ratio (srcW by srcH). Every frame is
+// later scaled to fit inside outW by this height and padded, so a set of
+// differently-sized images shares one canvas. It never returns less than 2, and
+// rounds up to an even number because the GIF scaler needs even dimensions.
+func CanvasHeight(srcW, srcH, outW int) int {
+	if srcW <= 0 || srcH <= 0 || outW <= 0 {
+		return 2
+	}
+	h := int(math.Round(float64(outW) * float64(srcH) / float64(srcW)))
+	if h < 2 {
+		h = 2
+	}
+	if h%2 != 0 {
+		h++
+	}
+	return h
 }

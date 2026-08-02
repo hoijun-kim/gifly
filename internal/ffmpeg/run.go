@@ -43,14 +43,20 @@ func parseProgressLine(line string, p *Progress) bool {
 	return false
 }
 
-// Run executes bin with gifly's standard global flags followed by args, parsing
-// the -progress stream on stdout and calling onProgress (if non-nil) for each
-// block. On a non-zero exit it returns an error carrying the tail of stderr, so
-// the caller can surface the real cause (unsupported codec, missing file, ...).
-// A cancelled ctx kills the process.
+// Run executes bin with gifly's standard global flags followed by args (see
+// runArgs for the streaming/error behavior).
 func Run(ctx context.Context, bin string, args []string, onProgress func(Progress)) error {
 	full := append([]string{"-hide_banner", "-loglevel", "error", "-progress", "pipe:1", "-nostats"}, args...)
-	cmd := exec.CommandContext(ctx, bin, full...)
+	return runArgs(ctx, bin, full, onProgress)
+}
+
+// runArgs runs bin with exactly args (no flags prepended), parses the -progress
+// stream on stdout into onProgress, kills the process on ctx cancel, and on a
+// non-zero exit returns an error carrying the tail of stderr. Run adds the
+// global flags; tests call runArgs directly with a test-binary re-exec, which
+// must not receive those flags.
+func runArgs(ctx context.Context, bin string, args []string, onProgress func(Progress)) error {
+	cmd := exec.CommandContext(ctx, bin, args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
