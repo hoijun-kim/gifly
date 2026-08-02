@@ -22,7 +22,7 @@ func main() {
 		MinWidth:    520,
 		MinHeight:   480,
 		Frameless:   true,
-		AssetServer: &assetserver.Options{Assets: assets},
+		AssetServer: &assetserver.Options{Assets: assets, Handler: a.PreviewHandler()},
 		OnStartup:   a.Startup,
 		Bind:        []interface{}{a},
 	}); err != nil {

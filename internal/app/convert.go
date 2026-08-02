@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/hoijun-kim/gifly/internal/ffmpeg"
 	"github.com/hoijun-kim/gifly/internal/gifjob"
@@ -118,7 +119,11 @@ func imagesConfig(req ImagesRequest, height int) gifjob.ImagesConfig {
 // emitProgress safely emits a progress event, guarding against panics when
 // no Wails runtime is available (e.g., in tests).
 func (a *App) emitProgress(phase string, pct int) {
-	defer func() { recover() }()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("gifly: progress emit recovered: %v", r)
+		}
+	}()
 	if a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "convert:progress", ProgressEvent{Phase: phase, Percent: pct})
 	}
@@ -136,10 +141,16 @@ func (a *App) ConvertVideo(req VideoRequest) (ConvertResult, error) {
 		return ConvertResult{}, err
 	}
 
-	// Create a cancellable context and store the cancel func
+	// Create a cancellable context and store the cancel func under lock
 	ctx, cancel := context.WithCancel(context.Background())
+	a.mu.Lock()
 	a.cancelFn = cancel
-	defer func() { a.cancelFn = nil }()
+	a.mu.Unlock()
+	defer func() {
+		a.mu.Lock()
+		a.cancelFn = nil
+		a.mu.Unlock()
+	}()
 
 	// Compute total duration for progress calculation
 	totalMS := cfg.EndMS - cfg.StartMS
@@ -152,6 +163,9 @@ func (a *App) ConvertVideo(req VideoRequest) (ConvertResult, error) {
 	if err != nil {
 		return ConvertResult{}, err
 	}
+
+	// Store the result as the preview
+	a.SetPreview(result.Path)
 
 	return ConvertResult{
 		Path:   result.Path,
@@ -185,10 +199,16 @@ func (a *App) ConvertImages(req ImagesRequest) (ConvertResult, error) {
 		return ConvertResult{}, err
 	}
 
-	// Create a cancellable context and store the cancel func
+	// Create a cancellable context and store the cancel func under lock
 	ctx, cancel := context.WithCancel(context.Background())
+	a.mu.Lock()
 	a.cancelFn = cancel
-	defer func() { a.cancelFn = nil }()
+	a.mu.Unlock()
+	defer func() {
+		a.mu.Lock()
+		a.cancelFn = nil
+		a.mu.Unlock()
+	}()
 
 	runner := ffmpeg.RunnerFunc(ffmpeg.Run)
 	result, err := gifjob.RunImages(ctx, tools, runner, cfg, req.Out, func(p ffmpeg.Progress) {
@@ -206,6 +226,9 @@ func (a *App) ConvertImages(req ImagesRequest) (ConvertResult, error) {
 		return ConvertResult{}, err
 	}
 
+	// Store the result as the preview
+	a.SetPreview(result.Path)
+
 	return ConvertResult{
 		Path:   result.Path,
 		Bytes:  result.Bytes,
@@ -216,7 +239,10 @@ func (a *App) ConvertImages(req ImagesRequest) (ConvertResult, error) {
 
 // Cancel aborts the in-flight conversion.
 func (a *App) Cancel() {
-	if a.cancelFn != nil {
-		a.cancelFn()
+	a.mu.Lock()
+	cancelFn := a.cancelFn
+	a.mu.Unlock()
+	if cancelFn != nil {
+		cancelFn()
 	}
 }

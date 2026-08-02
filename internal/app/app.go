@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"sync"
 
 	"github.com/hoijun-kim/gifly/internal/ffmpeg"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -12,8 +13,10 @@ import (
 
 // App is the Wails-bound application object.
 type App struct {
-	ctx      context.Context
-	cancelFn context.CancelFunc
+	ctx         context.Context
+	mu          sync.Mutex
+	cancelFn    context.CancelFunc
+	previewPath string
 }
 
 // NewApp constructs the App.

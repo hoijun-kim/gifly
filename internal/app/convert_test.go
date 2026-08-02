@@ -1,6 +1,10 @@
 package app
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/hoijun-kim/gifly/internal/gifjob"
+)
 
 func TestPercentClamped(t *testing.T) {
 	if p := percent(500, 2000); p != 25 {
@@ -25,5 +29,47 @@ func TestVideoConfigMapsRequest(t *testing.T) {
 	}
 	if c.Quality.MaxColors != 200 || !c.Quality.Dither {
 		t.Errorf("quality mapping wrong: %+v", c.Quality)
+	}
+}
+
+func TestImagesConfigMapsRequest(t *testing.T) {
+	req := ImagesRequest{Inputs: []string{"a.png", "b.png"}, FrameMS: 100, Width: 320, Loop: "once", Colors: 128, Dither: false}
+	c := imagesConfig(req, 240)
+	if len(c.Inputs) != 2 || c.Inputs[0] != "a.png" || c.Inputs[1] != "b.png" {
+		t.Errorf("imagesConfig inputs wrong: %+v", c.Inputs)
+	}
+	if c.FrameMS != 100 {
+		t.Errorf("imagesConfig FrameMS = %d, want 100", c.FrameMS)
+	}
+	if c.Width != 320 {
+		t.Errorf("imagesConfig Width = %d, want 320", c.Width)
+	}
+	if c.Height != 240 {
+		t.Errorf("imagesConfig Height = %d, want 240", c.Height)
+	}
+	if int(c.Loop) != -1 { // "once" -> -1
+		t.Errorf("loop once should map to -1, got %d", int(c.Loop))
+	}
+	if c.Quality.MaxColors != 128 || c.Quality.Dither {
+		t.Errorf("quality mapping wrong: %+v", c.Quality)
+	}
+}
+
+func TestParseLoopMode(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected gifjob.LoopMode
+	}{
+		{"forever", gifjob.LoopForever},
+		{"once", gifjob.LoopOnce},
+		{"5", gifjob.LoopMode(5)},
+		{"nope", gifjob.LoopForever}, // invalid -> default to forever
+		{"0", gifjob.LoopForever},    // 0 is not positive, falls back to forever
+	}
+	for _, tt := range tests {
+		got := parseLoopMode(tt.input)
+		if got != tt.expected {
+			t.Errorf("parseLoopMode(%q) = %d, want %d", tt.input, got, tt.expected)
+		}
 	}
 }
