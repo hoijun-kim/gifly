@@ -2,10 +2,11 @@
   import "./style.css";
   import TitleBar from "./components/TitleBar.svelte";
   import ModeSwitch from "./components/ModeSwitch.svelte";
+  import Video from "./modes/Video.svelte";
   import { mode } from "./lib/wails";
 
-  // Video.svelte and Images.svelte (Tasks 6-7) replace these placeholders;
-  // the mode store and the layout around it are already the real shape.
+  // Images.svelte (Task 7) replaces the remaining placeholder; the mode
+  // store and the layout around it are already the real shape.
 </script>
 
 <div id="app">
@@ -14,10 +15,7 @@
     <ModeSwitch />
     <section class="stage">
       {#if $mode === "video"}
-        <div class="placeholder">
-          <p>Pick a video to trim and turn into a GIF.</p>
-          <p class="placeholder-note">Video mode arrives in Task 6.</p>
-        </div>
+        <Video />
       {:else}
         <div class="placeholder">
           <p>Add images and turn them into an animated GIF.</p>
