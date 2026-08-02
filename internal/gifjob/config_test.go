@@ -39,6 +39,10 @@ func TestCanvasHeight(t *testing.T) {
 	if got := CanvasHeight(0, 0, 0); got != 2 {
 		t.Errorf("CanvasHeight(0,0,0) = %d, want 2", got)
 	}
+	// All-positive inputs that round below 2 exercise the floor: 100000x1 at width 10 -> round(10*1/100000)=0 -> floored to 2.
+	if got := CanvasHeight(100000, 1, 10); got != 2 {
+		t.Errorf("CanvasHeight(100000,1,10) = %d, want 2 (floor)", got)
+	}
 }
 
 func TestImagesConfigValidate(t *testing.T) {
