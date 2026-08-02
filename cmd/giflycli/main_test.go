@@ -33,3 +33,15 @@ func TestParseLoop(t *testing.T) {
 		}
 	}
 }
+
+func TestImagesHeight(t *testing.T) {
+	// signature: imagesHeight(override, width, firstW, firstH int) int
+	// override <= 0 -> derive from the first frame via CanvasHeight
+	if got := imagesHeight(0, 800, 1600, 900); got != gifjob.CanvasHeight(1600, 900, 800) {
+		t.Errorf("imagesHeight(derive) = %d, want %d", got, gifjob.CanvasHeight(1600, 900, 800))
+	}
+	// positive override is used verbatim
+	if got := imagesHeight(500, 800, 1600, 900); got != 500 {
+		t.Errorf("imagesHeight(override) = %d, want 500", got)
+	}
+}

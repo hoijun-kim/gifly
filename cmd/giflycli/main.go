@@ -38,6 +38,15 @@ func quality(colors int, noDither bool) gifjob.Quality {
 	return gifjob.Quality{MaxColors: colors, Dither: !noDither}
 }
 
+// imagesHeight picks the images canvas height: a positive -h override, else the
+// even height derived from the first frame's aspect at the output width.
+func imagesHeight(override, width, firstW, firstH int) int {
+	if override > 0 {
+		return override
+	}
+	return gifjob.CanvasHeight(firstW, firstH, width)
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: giflycli <video|images> ...")
@@ -100,6 +109,7 @@ func run(sub string, argv []string) error {
 		out := fs.String("o", "out.gif", "output gif")
 		ms := fs.Int("ms", 100, "per-frame duration (ms)")
 		w := fs.Int("w", 480, "output width")
+		h := fs.Int("h", 0, "output height; 0 = from the first image")
 		loopS := fs.String("loop", "forever", "forever | once | N")
 		colors := fs.Int("colors", 256, "palette colors 2..256")
 		noDither := fs.Bool("nodither", false, "disable dithering")
@@ -110,7 +120,15 @@ func run(sub string, argv []string) error {
 		if err != nil {
 			return err
 		}
-		c := gifjob.ImagesConfig{Inputs: fs.Args(), FrameMS: *ms, Width: *w, Loop: loop, Quality: quality(*colors, *noDither)}
+		if len(fs.Args()) == 0 {
+			return fmt.Errorf("no input images")
+		}
+		first, err := probe.Image(fs.Args()[0])
+		if err != nil {
+			return err
+		}
+		height := imagesHeight(*h, *w, first.Width, first.Height)
+		c := gifjob.ImagesConfig{Inputs: fs.Args(), FrameMS: *ms, Width: *w, Height: height, Loop: loop, Quality: quality(*colors, *noDither)}
 		res, err := gifjob.RunImages(context.Background(), tools, ffmpeg.RunnerFunc(ffmpeg.Run), c, *out, onProg)
 		if err != nil {
 			return err
