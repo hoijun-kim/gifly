@@ -54,3 +54,58 @@ func TestConvertImagesEndToEnd(t *testing.T) {
 		t.Fatalf("output not a multi-frame GIF: %v (%d frames)", err, len(g.Image))
 	}
 }
+
+func TestConvertVideoEndToEnd(t *testing.T) {
+	tools, err := ffmpeg.Tools()
+	if err != nil {
+		t.Skipf("no ffmpeg: %v", err)
+	}
+	dir := t.TempDir()
+
+	// Generate a short test video using lavfi testsrc
+	inMP4 := filepath.Join(dir, "in.mp4")
+	args := []string{"-y", "-f", "lavfi", "-i", "testsrc=duration=2:size=160x120:rate=10", "-c:v", "mpeg4", "-q:v", "3", inMP4}
+	if err := ffmpeg.Run(context.Background(), tools.FFmpeg, args, nil); err != nil {
+		t.Fatalf("failed to generate test video: %v", err)
+	}
+
+	a := NewApp()
+	a.ctx = context.Background() // no Wails runtime; events are best-effort
+	outGIF := filepath.Join(dir, "out.gif")
+
+	req := VideoRequest{
+		Input:   inMP4,
+		StartMS: 200,
+		EndMS:   1200,
+		FPS:     8,
+		Width:   120,
+		Loop:    "forever",
+		Colors:  128,
+		Dither:  true,
+		Out:     outGIF,
+	}
+
+	res, err := a.ConvertVideo(req)
+	if err != nil {
+		t.Fatalf("ConvertVideo = %v", err)
+	}
+
+	f, err := os.Open(res.Path)
+	if err != nil {
+		t.Fatalf("failed to open output GIF: %v", err)
+	}
+	defer f.Close()
+
+	g, err := gif.DecodeAll(f)
+	if err != nil {
+		t.Fatalf("output not a valid GIF: %v", err)
+	}
+
+	if len(g.Image) < 2 {
+		t.Errorf("output has only %d frame(s), want >= 2", len(g.Image))
+	}
+
+	if res.Width != 120 {
+		t.Errorf("result width = %d, want 120", res.Width)
+	}
+}

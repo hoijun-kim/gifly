@@ -244,6 +244,7 @@ func (a *App) ConvertImages(req ImagesRequest) (ConvertResult, error) {
 func (a *App) Cancel() {
 	a.mu.Lock()
 	cancelFn := a.cancelFn
+	a.cancelFn = nil
 	a.mu.Unlock()
 	if cancelFn != nil {
 		cancelFn()
