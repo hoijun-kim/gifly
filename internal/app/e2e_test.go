@@ -38,7 +38,7 @@ func TestConvertImagesEndToEnd(t *testing.T) {
 	out := filepath.Join(dir, "out.gif")
 	req := ImagesRequest{
 		Inputs:  []string{mk("a.png", 200, 120, color.RGBA{255, 0, 0, 255}), mk("b.png", 80, 200, color.RGBA{0, 0, 255, 255})},
-		FrameMS: 200, Width: 240, Loop: "forever", Colors: 256, Dither: true, Out: out,
+		FrameMS: 200, Width: 240, Loop: "forever", Colors: 256, Dither: "sierra2", Out: out,
 	}
 	res, err := a.ConvertImages(req)
 	if err != nil {
@@ -81,7 +81,7 @@ func TestConvertVideoEndToEnd(t *testing.T) {
 		Width:   120,
 		Loop:    "forever",
 		Colors:  128,
-		Dither:  true,
+		Dither:  "sierra2",
 		Out:     outGIF,
 	}
 
@@ -123,7 +123,7 @@ func TestConvertFitsToTargetSize(t *testing.T) {
 	}
 	a := NewApp()
 	a.ctx = context.Background()
-	base := VideoRequest{Input: in, StartMS: 0, EndMS: 2000, FPS: 15, Width: 320, Loop: "forever", Colors: 256, Dither: true, Out: filepath.Join(dir, "base.gif")}
+	base := VideoRequest{Input: in, StartMS: 0, EndMS: 2000, FPS: 15, Width: 320, Loop: "forever", Colors: 256, Dither: "sierra2", Out: filepath.Join(dir, "base.gif")}
 	res0, err := a.ConvertVideo(base)
 	if err != nil {
 		t.Fatalf("baseline convert: %v", err)
@@ -144,5 +144,36 @@ func TestConvertFitsToTargetSize(t *testing.T) {
 	if res1.Bytes > int64(targetKB)*1024 && res1.Width != 120 {
 		t.Errorf("fit output %d bytes over target %d KB but width %d is above the 120 floor",
 			res1.Bytes, targetKB, res1.Width)
+	}
+}
+
+func TestConvertVideoWebPThroughBinding(t *testing.T) {
+	tools, err := ffmpeg.Tools()
+	if err != nil {
+		t.Skipf("no ffmpeg: %v", err)
+	}
+	dir := t.TempDir()
+	in := filepath.Join(dir, "in.mp4")
+	if err := ffmpeg.Run(context.Background(), tools.FFmpeg,
+		[]string{"-y", "-f", "lavfi", "-i", "testsrc=duration=2:size=320x240:rate=15", "-c:v", "mpeg4", "-q:v", "3", in}, nil); err != nil {
+		t.Fatalf("making test video: %v", err)
+	}
+	a := NewApp()
+	a.ctx = context.Background()
+	out := filepath.Join(dir, "out.webp")
+	req := VideoRequest{
+		Input: in, StartMS: 0, EndMS: 1500, FPS: 10, Width: 200, SrcWidth: 320, SrcHeight: 240,
+		Aspect: "1:1", Speed: 1, Loop: "forever", Colors: 256, Dither: "sierra2", WebPQuality: 80,
+		Format: "webp", Out: out,
+	}
+	res, err := a.ConvertVideo(req)
+	if err != nil {
+		t.Fatalf("ConvertVideo webp = %v", err)
+	}
+	if res.Bytes < 100 {
+		t.Errorf("webp output too small: %d bytes", res.Bytes)
+	}
+	if res.Width != res.Height {
+		t.Errorf("1:1 aspect output %dx%d is not square", res.Width, res.Height)
 	}
 }

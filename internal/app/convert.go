@@ -19,10 +19,30 @@ type VideoRequest struct {
 	EndMS   int64
 	FPS     int
 	Width   int
-	Loop    string
-	Colors  int
-	Dither  bool
-	Out     string
+
+	// SrcWidth/SrcHeight is the source video's pixel size, used to compute the
+	// aspect-aware output height.
+	SrcWidth  int
+	SrcHeight int
+	// Aspect is an optional center-crop applied before scaling ("", "1:1",
+	// "16:9", "9:16").
+	Aspect string
+	// Speed is a playback rate multiplier; <=0 means normal speed.
+	Speed     float64
+	Reverse   bool
+	Boomerang bool
+
+	Loop   string
+	Colors int
+	// Dither is a gifjob.DitherMethod name ("none", "bayer", "sierra2",
+	// "floyd"); empty or unknown defaults to sierra2.
+	Dither string
+	// WebPQuality is 0..100 for the WebP encoder; <=0 defaults to 75.
+	WebPQuality int
+	// Format is the output container ("gif", "webp", "apng"); empty or
+	// unknown defaults to gif.
+	Format string
+	Out    string
 
 	// TargetKB is the desired output size in kilobytes. 0 means no target: the
 	// first encode is kept as-is. When positive and the first encode comes out
@@ -36,10 +56,25 @@ type ImagesRequest struct {
 	Inputs  []string
 	FrameMS int
 	Width   int
-	Loop    string
-	Colors  int
-	Dither  bool
-	Out     string
+	// Aspect is an optional center-crop applied before scaling ("", "1:1",
+	// "16:9", "9:16").
+	Aspect string
+	// Speed is a playback rate multiplier; <=0 means normal speed.
+	Speed     float64
+	Reverse   bool
+	Boomerang bool
+
+	Loop   string
+	Colors int
+	// Dither is a gifjob.DitherMethod name ("none", "bayer", "sierra2",
+	// "floyd"); empty or unknown defaults to sierra2.
+	Dither string
+	// WebPQuality is 0..100 for the WebP encoder; <=0 defaults to 75.
+	WebPQuality int
+	// Format is the output container ("gif", "webp", "apng"); empty or
+	// unknown defaults to gif.
+	Format string
+	Out    string
 
 	// TargetKB is the desired output size in kilobytes. 0 means no target: the
 	// first encode is kept as-is. When positive and the first encode comes out
@@ -118,50 +153,93 @@ func nextFitWidth(w int) int {
 	return n
 }
 
-// ditherFromBool maps the current boolean dither request onto the engine's
-// dither method (Plan 5 will replace this with a real method selector).
-func ditherFromBool(on bool) gifjob.DitherMethod {
-	if on {
-		return gifjob.DitherSierra
+// parseFormatReq maps a request's format string to a gifjob.Format, defaulting
+// to GIF for empty or unknown values.
+func parseFormatReq(s string) gifjob.Format {
+	if f := gifjob.Format(s); f.Valid() {
+		return f
 	}
-	return gifjob.DitherNone
+	return gifjob.FormatGIF
+}
+
+// parseAspectReq maps a request's aspect string to a gifjob.Aspect, defaulting
+// to free for empty or unknown values.
+func parseAspectReq(s string) gifjob.Aspect {
+	if a := gifjob.Aspect(s); a.Valid() {
+		return a
+	}
+	return gifjob.AspectFree
+}
+
+// parseDitherReq maps a request's dither string to a gifjob.DitherMethod,
+// defaulting to sierra2 for empty or unknown values.
+func parseDitherReq(s string) gifjob.DitherMethod {
+	switch gifjob.DitherMethod(s) {
+	case gifjob.DitherNone, gifjob.DitherBayer, gifjob.DitherSierra, gifjob.DitherFloyd:
+		return gifjob.DitherMethod(s)
+	}
+	return gifjob.DitherSierra
+}
+
+// reqSpeed normalizes a request speed: a non-positive value (the zero value, or
+// a frontend that omitted it) means normal speed.
+func reqSpeed(s float64) float64 {
+	if s <= 0 {
+		return 1
+	}
+	return s
+}
+
+// reqWebPQuality defaults a non-positive quality to 75.
+func reqWebPQuality(q int) int {
+	if q <= 0 {
+		return 75
+	}
+	return q
 }
 
 // videoConfig maps a VideoRequest to a gifjob.VideoConfig.
 func videoConfig(req VideoRequest) gifjob.VideoConfig {
 	return gifjob.VideoConfig{
-		Input:   req.Input,
-		StartMS: req.StartMS,
-		EndMS:   req.EndMS,
-		FPS:     req.FPS,
-		Width:   req.Width,
-		Loop:    parseLoopMode(req.Loop),
+		Input:     req.Input,
+		StartMS:   req.StartMS,
+		EndMS:     req.EndMS,
+		FPS:       req.FPS,
+		Width:     req.Width,
+		SrcWidth:  req.SrcWidth,
+		SrcHeight: req.SrcHeight,
+		Aspect:    parseAspectReq(req.Aspect),
+		Speed:     reqSpeed(req.Speed),
+		Reverse:   req.Reverse,
+		Boomerang: req.Boomerang,
+		Loop:      parseLoopMode(req.Loop),
+		Format:    parseFormatReq(req.Format),
 		Quality: gifjob.Quality{
 			MaxColors:   req.Colors,
-			Dither:      ditherFromBool(req.Dither),
-			WebPQuality: 75,
+			Dither:      parseDitherReq(req.Dither),
+			WebPQuality: reqWebPQuality(req.WebPQuality),
 		},
-		Format: gifjob.FormatGIF,
-		Speed:  1,
 	}
 }
 
-// imagesConfig maps an ImagesRequest to a gifjob.ImagesConfig. It probes the
-// first image to compute the canvas height.
+// imagesConfig maps an ImagesRequest to a gifjob.ImagesConfig. height is the
+// precomputed aspect-aware canvas height.
 func imagesConfig(req ImagesRequest, height int) gifjob.ImagesConfig {
 	return gifjob.ImagesConfig{
-		Inputs:  req.Inputs,
-		FrameMS: req.FrameMS,
-		Width:   req.Width,
-		Height:  height,
-		Loop:    parseLoopMode(req.Loop),
+		Inputs:    req.Inputs,
+		FrameMS:   req.FrameMS,
+		Width:     req.Width,
+		Height:    height,
+		Speed:     reqSpeed(req.Speed),
+		Reverse:   req.Reverse,
+		Boomerang: req.Boomerang,
+		Loop:      parseLoopMode(req.Loop),
+		Format:    parseFormatReq(req.Format),
 		Quality: gifjob.Quality{
 			MaxColors:   req.Colors,
-			Dither:      ditherFromBool(req.Dither),
-			WebPQuality: 75,
+			Dither:      parseDitherReq(req.Dither),
+			WebPQuality: reqWebPQuality(req.WebPQuality),
 		},
-		Format: gifjob.FormatGIF,
-		Speed:  1,
 	}
 }
 
@@ -274,7 +352,8 @@ func (a *App) ConvertImages(req ImagesRequest) (ConvertResult, error) {
 		return ConvertResult{}, err
 	}
 
-	height := gifjob.CanvasHeight(frame.Width, frame.Height, req.Width)
+	aspect := parseAspectReq(req.Aspect)
+	height := gifjob.OutputHeight(frame.Width, frame.Height, aspect, req.Width)
 	cfg := imagesConfig(req, height)
 
 	if err := cfg.Validate(); err != nil {
@@ -327,7 +406,7 @@ func (a *App) ConvertImages(req ImagesRequest) (ConvertResult, error) {
 			}
 			width = newWidth
 			cfg.Width = width
-			cfg.Height = gifjob.CanvasHeight(frame.Width, frame.Height, width)
+			cfg.Height = gifjob.OutputHeight(frame.Width, frame.Height, aspect, width)
 
 			a.emitProgress("fitting", 0)
 			result, err = gifjob.RunImages(ctx, tools, runner, cfg, req.Out, imagesProgress("fitting"))
