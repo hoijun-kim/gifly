@@ -23,6 +23,11 @@ type VideoRequest struct {
 	Colors  int
 	Dither  bool
 	Out     string
+
+	// TargetKB is the desired output size in kilobytes. 0 means no target: the
+	// first encode is kept as-is. When positive and the first encode comes out
+	// larger, ConvertVideo re-encodes at shrinking widths to fit.
+	TargetKB int
 }
 
 // ImagesRequest is the JSON-friendly request sent from the frontend for an
@@ -35,6 +40,11 @@ type ImagesRequest struct {
 	Colors  int
 	Dither  bool
 	Out     string
+
+	// TargetKB is the desired output size in kilobytes. 0 means no target: the
+	// first encode is kept as-is. When positive and the first encode comes out
+	// larger, ConvertImages re-encodes at shrinking widths to fit.
+	TargetKB int
 }
 
 // ConvertResult describes a finished GIF returned to the frontend.
@@ -82,6 +92,30 @@ func parseLoopMode(loop string) gifjob.LoopMode {
 		}
 		return gifjob.LoopForever
 	}
+}
+
+// fitFloorWidth is the smallest width the fit loop will try before giving up.
+const fitFloorWidth = 120
+
+// fitMaxAttempts bounds how many re-encodes the fit loop will try to hit a
+// size target, so a stubborn source cannot loop indefinitely.
+const fitMaxAttempts = 8
+
+// nextFitWidth returns the next smaller EVEN width to try when the output is
+// over the size target. It shrinks by ~15% but always strictly decreases and
+// never goes below floor (120).
+func nextFitWidth(w int) int {
+	n := int(float64(w) * 0.85)
+	if n >= w {
+		n = w - 2
+	}
+	if n%2 != 0 {
+		n--
+	}
+	if n < fitFloorWidth {
+		n = fitFloorWidth
+	}
+	return n
 }
 
 // videoConfig maps a VideoRequest to a gifjob.VideoConfig.
@@ -167,6 +201,36 @@ func (a *App) ConvertVideo(req VideoRequest) (ConvertResult, error) {
 		return ConvertResult{}, err
 	}
 
+	// If a size target is set and the first encode is over it, re-encode at
+	// shrinking widths until it fits, the floor width is hit, or attempts run out.
+	if targetBytes := int64(req.TargetKB) * 1024; req.TargetKB > 0 && result.Bytes > targetBytes {
+		width := cfg.Width
+		for i := 0; i < fitMaxAttempts; i++ {
+			if ctx.Err() != nil {
+				return ConvertResult{}, ctx.Err()
+			}
+			newWidth := nextFitWidth(width)
+			if newWidth == width {
+				break
+			}
+			width = newWidth
+			cfg.Width = width
+
+			a.emitProgress("fitting", 0)
+			result, err = gifjob.RunVideo(ctx, tools, runner, cfg, req.Out, func(p ffmpeg.Progress) {
+				pct := percent(p.OutTimeMS, totalMS)
+				a.emitProgress("fitting", pct)
+			})
+			if err != nil {
+				return ConvertResult{}, err
+			}
+
+			if result.Bytes <= targetBytes || width == fitFloorWidth {
+				break
+			}
+		}
+	}
+
 	// Store the result as the preview
 	a.SetPreview(result.Path)
 
@@ -214,19 +278,52 @@ func (a *App) ConvertImages(req ImagesRequest) (ConvertResult, error) {
 	}()
 
 	runner := ffmpeg.RunnerFunc(ffmpeg.Run)
-	result, err := gifjob.RunImages(ctx, tools, runner, cfg, req.Out, func(p ffmpeg.Progress) {
-		// For images, we emit frame-based progress
-		// Estimate: assume total frames = len(inputs), estimate progress by frame count
-		if len(req.Inputs) > 0 {
-			pct := (p.Frame * 100) / len(req.Inputs)
-			if pct > 100 {
-				pct = 100
+	imagesProgress := func(phase string) func(ffmpeg.Progress) {
+		return func(p ffmpeg.Progress) {
+			// For images, we emit frame-based progress
+			// Estimate: assume total frames = len(inputs), estimate progress by frame count
+			if len(req.Inputs) > 0 {
+				pct := (p.Frame * 100) / len(req.Inputs)
+				if pct > 100 {
+					pct = 100
+				}
+				a.emitProgress(phase, pct)
 			}
-			a.emitProgress("encoding", pct)
 		}
-	})
+	}
+
+	result, err := gifjob.RunImages(ctx, tools, runner, cfg, req.Out, imagesProgress("encoding"))
 	if err != nil {
 		return ConvertResult{}, err
+	}
+
+	// If a size target is set and the first encode is over it, re-encode at
+	// shrinking widths (recomputing the canvas height each time) until it fits,
+	// the floor width is hit, or attempts run out.
+	if targetBytes := int64(req.TargetKB) * 1024; req.TargetKB > 0 && result.Bytes > targetBytes {
+		width := cfg.Width
+		for i := 0; i < fitMaxAttempts; i++ {
+			if ctx.Err() != nil {
+				return ConvertResult{}, ctx.Err()
+			}
+			newWidth := nextFitWidth(width)
+			if newWidth == width {
+				break
+			}
+			width = newWidth
+			cfg.Width = width
+			cfg.Height = gifjob.CanvasHeight(frame.Width, frame.Height, width)
+
+			a.emitProgress("fitting", 0)
+			result, err = gifjob.RunImages(ctx, tools, runner, cfg, req.Out, imagesProgress("fitting"))
+			if err != nil {
+				return ConvertResult{}, err
+			}
+
+			if result.Bytes <= targetBytes || width == fitFloorWidth {
+				break
+			}
+		}
 	}
 
 	// Store the result as the preview

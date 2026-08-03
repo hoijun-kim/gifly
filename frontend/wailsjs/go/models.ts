@@ -42,6 +42,7 @@ export namespace app {
 	    Colors: number;
 	    Dither: boolean;
 	    Out: string;
+	    TargetKB: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ImagesRequest(source);
@@ -56,6 +57,7 @@ export namespace app {
 	        this.Colors = source["Colors"];
 	        this.Dither = source["Dither"];
 	        this.Out = source["Out"];
+	        this.TargetKB = source["TargetKB"];
 	    }
 	}
 	export class VideoInfo {
@@ -88,6 +90,7 @@ export namespace app {
 	    Colors: number;
 	    Dither: boolean;
 	    Out: string;
+	    TargetKB: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new VideoRequest(source);
@@ -104,6 +107,7 @@ export namespace app {
 	        this.Colors = source["Colors"];
 	        this.Dither = source["Dither"];
 	        this.Out = source["Out"];
+	        this.TargetKB = source["TargetKB"];
 	    }
 	}
 
