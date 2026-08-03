@@ -6,46 +6,59 @@ import (
 	"testing"
 )
 
-func TestVideoArgsTwoPass(t *testing.T) {
-	c := VideoConfig{Input: "in.mp4", StartMS: 1000, EndMS: 3500, FPS: 15, Width: 480, Loop: LoopForever, Quality: Quality{MaxColors: 128, Dither: DitherSierra}}
-	p1, p2 := VideoArgs(c, "pal.png", "out.gif")
-
+func TestVideoArgsGIF(t *testing.T) {
+	c := VideoConfig{Input: "in.mp4", StartMS: 1000, EndMS: 3500, FPS: 15, Width: 480, Loop: LoopForever, Format: FormatGIF, Quality: Quality{MaxColors: 128, Dither: DitherSierra}}
+	passes := VideoArgs(c, "pal.png", "out.gif")
+	if len(passes) != 2 {
+		t.Fatalf("GIF should be 2 passes, got %d", len(passes))
+	}
 	want1 := []string{
 		"-y", "-ss", "1.000", "-t", "2.500", "-i", "in.mp4",
-		"-vf", "fps=15,scale=480:-2:flags=lanczos,palettegen=max_colors=128:stats_mode=diff",
-		"pal.png",
+		"-filter_complex", "[0:v]fps=15,scale=480:-2:flags=lanczos[v];[v]palettegen=max_colors=128:stats_mode=diff[p]",
+		"-map", "[p]", "pal.png",
 	}
-	if !reflect.DeepEqual(p1, want1) {
-		t.Errorf("pass1 =\n%v\nwant\n%v", p1, want1)
+	if !reflect.DeepEqual(passes[0], want1) {
+		t.Errorf("pass1 =\n%v\nwant\n%v", passes[0], want1)
 	}
 	want2 := []string{
 		"-y", "-ss", "1.000", "-t", "2.500", "-i", "in.mp4", "-i", "pal.png",
-		"-lavfi", "fps=15,scale=480:-2:flags=lanczos[x];[x][1:v]paletteuse=dither=sierra2_4a",
-		"-loop", "0", "out.gif",
+		"-filter_complex", "[0:v]fps=15,scale=480:-2:flags=lanczos[v];[v][1:v]paletteuse=dither=sierra2_4a[o]",
+		"-map", "[o]", "-loop", "0", "out.gif",
 	}
-	if !reflect.DeepEqual(p2, want2) {
-		t.Errorf("pass2 =\n%v\nwant\n%v", p2, want2)
-	}
-}
-
-func TestVideoArgsDitherOffAndLoopOnce(t *testing.T) {
-	c := VideoConfig{Input: "in.mp4", StartMS: 0, EndMS: 1000, FPS: 10, Width: 320, Loop: LoopOnce, Quality: Quality{MaxColors: 256, Dither: DitherNone}}
-	_, p2 := VideoArgs(c, "pal.png", "out.gif")
-	joined := strings.Join(p2, " ")
-	if !strings.Contains(joined, "paletteuse=dither=none") {
-		t.Errorf("dither off should produce dither=none: %s", joined)
-	}
-	if !strings.Contains(joined, "-loop -1") {
-		t.Errorf("LoopOnce should produce -loop -1: %s", joined)
+	if !reflect.DeepEqual(passes[1], want2) {
+		t.Errorf("pass2 =\n%v\nwant\n%v", passes[1], want2)
 	}
 }
 
-func TestVideoArgsPositiveLoop(t *testing.T) {
-	c := VideoConfig{Input: "in.mp4", StartMS: 0, EndMS: 1000, FPS: 10, Width: 320, Loop: LoopMode(5), Quality: Quality{MaxColors: 256, Dither: DitherSierra}}
-	_, p2 := VideoArgs(c, "pal.png", "out.gif")
-	joined := strings.Join(p2, " ")
-	if !strings.Contains(joined, "-loop 5") {
-		t.Errorf("positive loop count should produce -loop 5: %s", joined)
+func TestVideoArgsWebP(t *testing.T) {
+	c := VideoConfig{Input: "in.mp4", StartMS: 0, EndMS: 1000, FPS: 10, Width: 160, Loop: LoopForever, Format: FormatWebP, Quality: Quality{MaxColors: 256, Dither: DitherSierra, WebPQuality: 80}}
+	passes := VideoArgs(c, "pal.png", "out.webp")
+	if len(passes) != 1 {
+		t.Fatalf("WebP should be 1 pass, got %d", len(passes))
+	}
+	want := []string{
+		"-y", "-ss", "0.000", "-t", "1.000", "-i", "in.mp4",
+		"-filter_complex", "[0:v]fps=10,scale=160:-2:flags=lanczos[v]", "-map", "[v]",
+		"-c:v", "libwebp_anim", "-loop", "0", "-q:v", "80", "out.webp",
+	}
+	if !reflect.DeepEqual(passes[0], want) {
+		t.Errorf("webp pass =\n%v\nwant\n%v", passes[0], want)
+	}
+}
+
+func TestVideoArgsAPNGLoopOnce(t *testing.T) {
+	c := VideoConfig{Input: "in.mp4", StartMS: 0, EndMS: 1000, FPS: 10, Width: 160, Loop: LoopOnce, Format: FormatAPNG, Quality: DefaultQuality()}
+	passes := VideoArgs(c, "pal.png", "out.png")
+	if len(passes) != 1 {
+		t.Fatalf("APNG should be 1 pass, got %d", len(passes))
+	}
+	want := []string{
+		"-y", "-ss", "0.000", "-t", "1.000", "-i", "in.mp4",
+		"-filter_complex", "[0:v]fps=10,scale=160:-2:flags=lanczos[v]", "-map", "[v]",
+		"-f", "apng", "-plays", "1", "out.png", // once -> plays 1
+	}
+	if !reflect.DeepEqual(passes[0], want) {
+		t.Errorf("apng pass =\n%v\nwant\n%v", passes[0], want)
 	}
 }
 

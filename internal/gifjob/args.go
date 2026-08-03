@@ -31,26 +31,39 @@ func paletteuse(width int, q Quality) string {
 	return scaleChain(width) + fmt.Sprintf("[x];[x][1:v]paletteuse=dither=%s", ditherArg(q))
 }
 
-// VideoArgs builds the two ffmpeg passes for a video job. Pass 1 writes the
-// optimized palette; pass 2 encodes the GIF against it. -ss before -i is a fast
-// seek; -t (duration) avoids the -ss/-to origin ambiguity. The config is assumed
-// already validated.
-func VideoArgs(c VideoConfig, palettePath, outPath string) (pass1, pass2 []string) {
-	start := secs(c.StartMS)
-	dur := secs(c.EndMS - c.StartMS)
-	fps := strconv.Itoa(c.FPS)
+// VideoArgs builds the ffmpeg passes for a video job. GIF is two passes
+// (palettegen then paletteuse); WebP and APNG are a single encode pass. -ss
+// before -i is a fast seek; -t (duration) avoids the -ss/-to origin ambiguity.
+// palettePath is used only by GIF. The config is assumed already validated.
+func VideoArgs(c VideoConfig, palettePath, outPath string) (passes [][]string) {
+	seek := []string{"-ss", secs(c.StartMS), "-t", secs(c.EndMS - c.StartMS)}
+	graph := videoGraph(c)
 
-	pass1 = []string{
-		"-y", "-ss", start, "-t", dur, "-i", c.Input,
-		"-vf", "fps=" + fps + "," + palettegen(c.Width, c.Quality),
-		palettePath,
+	switch c.Format {
+	case FormatWebP:
+		flag, val := loopArgs(FormatWebP, c.Loop)
+		p := append([]string{"-y"}, seek...)
+		p = append(p, "-i", c.Input, "-filter_complex", graph, "-map", "[v]",
+			"-c:v", "libwebp_anim", flag, val, "-q:v", strconv.Itoa(c.Quality.WebPQuality), outPath)
+		return [][]string{p}
+	case FormatAPNG:
+		flag, val := loopArgs(FormatAPNG, c.Loop)
+		p := append([]string{"-y"}, seek...)
+		p = append(p, "-i", c.Input, "-filter_complex", graph, "-map", "[v]",
+			"-f", "apng", flag, val, outPath)
+		return [][]string{p}
+	default: // GIF
+		p1 := append([]string{"-y"}, seek...)
+		p1 = append(p1, "-i", c.Input,
+			"-filter_complex", graph+";[v]"+palettegenTail(c.Quality)+"[p]",
+			"-map", "[p]", palettePath)
+		flag, val := loopArgs(FormatGIF, c.Loop)
+		p2 := append([]string{"-y"}, seek...)
+		p2 = append(p2, "-i", c.Input, "-i", palettePath,
+			"-filter_complex", graph+";[v][1:v]"+paletteuseTail(c.Quality)+"[o]",
+			"-map", "[o]", flag, val, outPath)
+		return [][]string{p1, p2}
 	}
-	pass2 = []string{
-		"-y", "-ss", start, "-t", dur, "-i", c.Input, "-i", palettePath,
-		"-lavfi", "fps=" + fps + "," + paletteuse(c.Width, c.Quality),
-		"-loop", strconv.Itoa(int(c.Loop)), outPath,
-	}
-	return pass1, pass2
 }
 
 // ImagesArgs builds the two ffmpeg passes for an images job, reading the ordered

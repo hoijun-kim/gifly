@@ -52,13 +52,20 @@ func RunVideo(ctx context.Context, tools ffmpeg.Paths, r Runner, c VideoConfig, 
 	palette.Close()
 	defer os.Remove(palettePath)
 
-	p1, p2 := VideoArgs(c, palettePath, outPath)
-	if err := r.Run(ctx, tools.FFmpeg, p1, nil); err != nil {
-		return Result{}, fmt.Errorf("palette pass: %w", err)
-	}
-	if err := r.Run(ctx, tools.FFmpeg, p2, onProgress); err != nil {
-		os.Remove(outPath)
-		return Result{}, fmt.Errorf("encode pass: %w", err)
+	passes := VideoArgs(c, palettePath, outPath)
+	last := len(passes) - 1
+	for i, args := range passes {
+		var cb func(ffmpeg.Progress)
+		if i == last {
+			cb = onProgress
+		}
+		if err := r.Run(ctx, tools.FFmpeg, args, cb); err != nil {
+			if i == last {
+				os.Remove(outPath)
+				return Result{}, fmt.Errorf("encode pass: %w", err)
+			}
+			return Result{}, fmt.Errorf("palette pass: %w", err)
+		}
 	}
 	return statResult(outPath)
 }
