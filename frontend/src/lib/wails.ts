@@ -1,9 +1,6 @@
 // Thin typed layer over the Wails-generated bindings (../../wailsjs), so
 // components import from one place instead of reaching into the generated
-// tree directly. Also owns the app-wide `mode` store, since that is UI state
-// no Go binding produces.
-import { writable, type Writable } from "svelte/store";
-
+// tree directly.
 import {
   Cancel as CancelBinding,
   ConvertImages as ConvertImagesBinding,
@@ -54,8 +51,3 @@ export const Quit = QuitRuntime;
 export function onProgress(handler: (event: ProgressEvent) => void): () => void {
   return EventsOn("convert:progress", (event: ProgressEvent) => handler(event));
 }
-
-export type Mode = "video" | "images";
-
-/** The active top-level mode (Video or Images), driven by ModeSwitch. */
-export const mode: Writable<Mode> = writable<Mode>("video");
