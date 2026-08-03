@@ -57,6 +57,7 @@ func Run(ctx context.Context, bin string, args []string, onProgress func(Progres
 // must not receive those flags.
 func runArgs(ctx context.Context, bin string, args []string, onProgress func(Progress)) error {
 	cmd := exec.CommandContext(ctx, bin, args...)
+	HideConsole(cmd) // no console window flash when the GUI launches ffmpeg
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

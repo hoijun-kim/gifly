@@ -16,6 +16,8 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+
+	"github.com/hoijun-kim/gifly/internal/ffmpeg"
 )
 
 // Media is what gifly needs to know about a video before converting it.
@@ -86,12 +88,14 @@ func parseRate(s string) float64 {
 
 // Video runs ffprobe on path and parses the result.
 func Video(ctx context.Context, ffprobe, path string) (Media, error) {
-	out, err := exec.CommandContext(ctx, ffprobe,
+	cmd := exec.CommandContext(ctx, ffprobe,
 		"-v", "error",
 		"-print_format", "json",
 		"-show_format", "-show_streams",
 		path,
-	).Output()
+	)
+	ffmpeg.HideConsole(cmd) // no console window flash when the GUI probes
+	out, err := cmd.Output()
 	if err != nil {
 		return Media{}, fmt.Errorf("probe: ffprobe on %q failed: %w", path, err)
 	}
