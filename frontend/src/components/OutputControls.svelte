@@ -1,12 +1,8 @@
 <script lang="ts">
-  // Platform presets (which set a max width + size target), an explicit target
-  // size, and the live size estimate (Workspace computes and passes it in).
+  // Platform presets (which set a max width + size target) and an explicit
+  // target size. The live estimate is shown in the left stage, next to the CTA.
   import { settings } from "../lib/settings";
   import { PLATFORM_PRESETS } from "../lib/request";
-  import { humanBytes } from "../lib/format";
-
-  export let displayEstimate: number;
-  export let estimateCapped = false;
 
   const PRESET_KEYS = Object.keys(PLATFORM_PRESETS);
 
@@ -19,26 +15,21 @@
   }
 </script>
 
-<section class="section">
-  <span class="eyebrow">Output</span>
-  <div class="chip-row" role="group" aria-label="Platform preset">
-    <button type="button" class="chip" class:active={$settings.preset === ""} on:click={clearPreset}>None</button>
-    {#each PRESET_KEYS as key (key)}
-      <button type="button" class="chip" class:active={$settings.preset === key} on:click={() => applyPreset(key)}>
-        {PLATFORM_PRESETS[key].label}
-      </button>
-    {/each}
+<div class="card">
+  <div class="card-head"><span class="eyebrow">Output</span><span class="card-note">preset &middot; target</span></div>
+  <div class="card-body">
+    <div class="chips" role="group" aria-label="Platform preset">
+      <button type="button" class="chip" class:on={$settings.preset === ""} on:click={clearPreset}>None</button>
+      {#each PRESET_KEYS as key (key)}
+        <button type="button" class="chip" class:on={$settings.preset === key} on:click={() => applyPreset(key)}>{PLATFORM_PRESETS[key].label}</button>
+      {/each}
+    </div>
+    <label class="field">
+      <span class="field-label">Target size (MB) <span class="timecode">optional</span></span>
+      <input class="mono" type="number" min="0" step="0.1" placeholder="off" bind:value={$settings.targetMB} on:input={clearPreset} />
+    </label>
+    {#if $settings.targetMB > 0}
+      <p class="hint">gifly shrinks the width to fit ~{$settings.targetMB} MB.</p>
+    {/if}
   </div>
-  <label class="field field-wide">
-    <span class="field-label">Target size (MB) <span class="field-optional">optional</span></span>
-    <input class="mono" type="number" min="0" step="0.1" placeholder="off" bind:value={$settings.targetMB} on:input={clearPreset} />
-  </label>
-  {#if $settings.targetMB > 0}
-    <p class="hint">gifly shrinks the width to fit ~{$settings.targetMB} MB</p>
-  {/if}
-  <p class="estimate">
-    <span>Estimated size</span>
-    <span class="estimate-value mono">~{humanBytes(displayEstimate)}</span>
-    {#if estimateCapped}<span class="estimate-note">(capped by target)</span>{/if}
-  </p>
-</section>
+</div>

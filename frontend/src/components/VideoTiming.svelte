@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Video-specific timing: the trim window (start/end seconds, clamped to the
-  // clip) and the output frame rate. FPS lives in the shared settings store;
-  // the trim seconds are owned by Workspace and bound in.
+  // Video-specific timing (right panel): the trim window (start/end seconds,
+  // clamped to the clip) and the output frame rate. FPS lives in the shared
+  // settings store; the trim seconds are owned by Workspace and bound in.
   import { settings } from "../lib/settings";
   import { msToTimecode } from "../lib/format";
 
@@ -24,29 +24,31 @@
   }
 </script>
 
-<section class="section">
-  <span class="eyebrow">Timing</span>
-  <div class="field-row">
-    <label class="field">
-      <span class="field-label">Start (s)</span>
-      <input class="mono" type="number" min="0" max={durationSec} step="0.1" bind:value={startSec} on:blur={clampStart} />
-      <span class="timecode mono">{msToTimecode(startMs)}</span>
-    </label>
-    <label class="field">
-      <span class="field-label">End (s)</span>
-      <input class="mono" type="number" min="0" max={durationSec} step="0.1" bind:value={endSec} on:blur={clampEnd} />
-      <span class="timecode mono">{msToTimecode(endMs)}</span>
-    </label>
+<div class="card">
+  <div class="card-head"><span class="eyebrow">Timing</span><span class="card-note">trim &middot; rate</span></div>
+  <div class="card-body">
+    <div class="row2">
+      <label class="field">
+        <span class="field-label">Start (s)</span>
+        <input class="mono" type="number" min="0" max={durationSec} step="0.1" bind:value={startSec} on:blur={clampStart} />
+        <span class="timecode">{msToTimecode(startMs)}</span>
+      </label>
+      <label class="field">
+        <span class="field-label">End (s)</span>
+        <input class="mono" type="number" min="0" max={durationSec} step="0.1" bind:value={endSec} on:blur={clampEnd} />
+        <span class="timecode">{msToTimecode(endMs)}</span>
+      </label>
+    </div>
+    <div class="field">
+      <span class="field-label">FPS <span class="val">{Math.round($settings.fps)}</span></span>
+      <input class="mono" type="number" min="1" step="1" bind:value={$settings.fps} />
+    </div>
+    <div class="chips" role="group" aria-label="FPS presets">
+      {#each FPS_PRESETS as preset (preset)}
+        <button type="button" class="chip" class:on={Math.round($settings.fps) === preset} on:click={() => ($settings.fps = preset)}>
+          {preset}
+        </button>
+      {/each}
+    </div>
   </div>
-  <label class="field field-wide">
-    <span class="field-label">FPS</span>
-    <input class="mono" type="number" min="1" step="1" bind:value={$settings.fps} />
-  </label>
-  <div class="chip-row" role="group" aria-label="FPS presets">
-    {#each FPS_PRESETS as preset (preset)}
-      <button type="button" class="chip mono" class:active={Math.round($settings.fps) === preset} on:click={() => ($settings.fps = preset)}>
-        {preset}
-      </button>
-    {/each}
-  </div>
-</section>
+</div>

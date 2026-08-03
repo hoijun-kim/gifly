@@ -35,10 +35,9 @@ func TestConvertImagesEndToEnd(t *testing.T) {
 	}
 	a := NewApp()
 	a.ctx = context.Background() // no Wails runtime; events are best-effort
-	out := filepath.Join(dir, "out.gif")
 	req := ImagesRequest{
 		Inputs:  []string{mk("a.png", 200, 120, color.RGBA{255, 0, 0, 255}), mk("b.png", 80, 200, color.RGBA{0, 0, 255, 255})},
-		FrameMS: 200, Width: 240, Loop: "forever", Colors: 256, Dither: "sierra2", Out: out,
+		FrameMS: 200, Width: 240, Loop: "forever", Colors: 256, Dither: "sierra2", OutDir: dir, OutName: "out", OnExist: "overwrite",
 	}
 	res, err := a.ConvertImages(req)
 	if err != nil {
@@ -71,8 +70,6 @@ func TestConvertVideoEndToEnd(t *testing.T) {
 
 	a := NewApp()
 	a.ctx = context.Background() // no Wails runtime; events are best-effort
-	outGIF := filepath.Join(dir, "out.gif")
-
 	req := VideoRequest{
 		Input:   inMP4,
 		StartMS: 200,
@@ -82,7 +79,9 @@ func TestConvertVideoEndToEnd(t *testing.T) {
 		Loop:    "forever",
 		Colors:  128,
 		Dither:  "sierra2",
-		Out:     outGIF,
+		OutDir:  dir,
+		OutName: "out",
+		OnExist: "overwrite",
 	}
 
 	res, err := a.ConvertVideo(req)
@@ -123,7 +122,7 @@ func TestConvertFitsToTargetSize(t *testing.T) {
 	}
 	a := NewApp()
 	a.ctx = context.Background()
-	base := VideoRequest{Input: in, StartMS: 0, EndMS: 2000, FPS: 15, Width: 320, Loop: "forever", Colors: 256, Dither: "sierra2", Out: filepath.Join(dir, "base.gif")}
+	base := VideoRequest{Input: in, StartMS: 0, EndMS: 2000, FPS: 15, Width: 320, Loop: "forever", Colors: 256, Dither: "sierra2", OutDir: dir, OutName: "base", OnExist: "overwrite"}
 	res0, err := a.ConvertVideo(base)
 	if err != nil {
 		t.Fatalf("baseline convert: %v", err)
@@ -131,7 +130,7 @@ func TestConvertFitsToTargetSize(t *testing.T) {
 	// Target half the untargeted size, so the fit loop must shrink to reach it.
 	targetKB := int(res0.Bytes/1024/2) + 1
 	fit := base
-	fit.Out = filepath.Join(dir, "fit.gif")
+	fit.OutName = "fit"
 	fit.TargetKB = targetKB
 	res1, err := a.ConvertVideo(fit)
 	if err != nil {
@@ -160,11 +159,10 @@ func TestConvertVideoWebPThroughBinding(t *testing.T) {
 	}
 	a := NewApp()
 	a.ctx = context.Background()
-	out := filepath.Join(dir, "out.webp")
 	req := VideoRequest{
 		Input: in, StartMS: 0, EndMS: 1500, FPS: 10, Width: 200, SrcWidth: 320, SrcHeight: 240,
 		Aspect: "1:1", Speed: 1, Loop: "forever", Colors: 256, Dither: "sierra2", WebPQuality: 80,
-		Format: "webp", Out: out,
+		Format: "webp", OutDir: dir, OutName: "out", OnExist: "overwrite",
 	}
 	res, err := a.ConvertVideo(req)
 	if err != nil {

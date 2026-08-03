@@ -17,10 +17,10 @@ func main() {
 	a := app.NewApp()
 	if err := wails.Run(&options.App{
 		Title:       "gifly",
-		Width:       720,
-		Height:      620,
-		MinWidth:    520,
-		MinHeight:   480,
+		Width:       920,
+		Height:      660,
+		MinWidth:    660,
+		MinHeight:   520,
 		Frameless:   true,
 		AssetServer: &assetserver.Options{Assets: assets, Handler: a.PreviewHandler()},
 		OnStartup:   a.Startup,

@@ -14,6 +14,14 @@ export function ConvertVideo(arg1) {
   return window['go']['app']['App']['ConvertVideo'](arg1);
 }
 
+export function CopyOutput(arg1) {
+  return window['go']['app']['App']['CopyOutput'](arg1);
+}
+
+export function PickFolder() {
+  return window['go']['app']['App']['PickFolder']();
+}
+
 export function PickImages() {
   return window['go']['app']['App']['PickImages']();
 }

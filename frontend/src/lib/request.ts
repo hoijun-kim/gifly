@@ -1,6 +1,6 @@
 import type { VideoInfo, ImageInfo, VideoRequest, ImagesRequest } from "./wails";
-import type { Settings, Format } from "./settings";
-import { formatExt } from "./format";
+import type { Settings } from "./settings";
+import type { Source } from "./source";
 
 // PLATFORM_PRESETS set a max width and a size target for common chat platforms.
 export const PLATFORM_PRESETS: Record<string, { label: string; maxWidth: number; targetMB: number }> = {
@@ -9,26 +9,26 @@ export const PLATFORM_PRESETS: Record<string, { label: string; maxWidth: number;
   twitter: { label: "Twitter", maxWidth: 506, targetMB: 15 },
 };
 
-// swapExt replaces (or appends) the extension of a path without touching its
-// directory. Windows and POSIX separators are both handled.
-function swapExt(path: string, ext: string): string {
+// dirOf returns the directory part of a path (no trailing separator), or "" if
+// the path has no directory. Windows and POSIX separators are both handled.
+export function dirOf(path: string): string {
   const slash = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
-  const dot = path.lastIndexOf(".");
-  const base = dot > slash ? path.slice(0, dot) : path;
-  return base + ext;
+  return slash >= 0 ? path.slice(0, slash) : "";
 }
 
-// deriveOut names a video's output next to the source with the format's ext.
-export function deriveOut(inputPath: string, format: Format): string {
-  return swapExt(inputPath, formatExt(format));
+// baseNameNoExt returns a path's file name without its directory or extension.
+export function baseNameNoExt(path: string): string {
+  const slash = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
+  const name = slash >= 0 ? path.slice(slash + 1) : path;
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(0, dot) : name;
 }
 
-// deriveImagesOut names an images output next to the first image with a
-// timestamp (so repeated runs in one folder do not collide) and the format ext.
-export function deriveImagesOut(firstPath: string, format: Format): string {
-  const slash = Math.max(firstPath.lastIndexOf("\\"), firstPath.lastIndexOf("/"));
-  const dir = slash >= 0 ? firstPath.slice(0, slash + 1) : "";
-  return `${dir}gifly-${Date.now()}${formatExt(format)}`;
+// defaultOutName is the base output name suggested for a source: a video's own
+// name, or "gifly" for a set of images (or the empty state).
+export function defaultOutName(src: Source | null): string {
+  if (src && src.kind === "video") return baseNameNoExt(src.info.Path);
+  return "gifly";
 }
 
 // loopValue turns the loop choice into the string the backend parses.
@@ -39,6 +39,13 @@ export function loopValue(s: Settings): string {
 function targetKB(targetMB: number): number {
   const mb = Number.isFinite(targetMB) && targetMB > 0 ? targetMB : 0;
   return Math.round(mb * 1024);
+}
+
+// outDir picks the destination folder: a chosen custom folder, else the folder
+// beside the source.
+function outDir(s: Settings, sourcePath: string): string {
+  if (s.outFolderMode === "custom" && s.outFolder.trim()) return s.outFolder.trim();
+  return dirOf(sourcePath);
 }
 
 export function buildVideoRequest(info: VideoInfo, s: Settings, timing: { startMs: number; endMs: number }): VideoRequest {
@@ -59,7 +66,9 @@ export function buildVideoRequest(info: VideoInfo, s: Settings, timing: { startM
     Dither: s.dither,
     WebPQuality: Math.round(s.webpQuality),
     Format: s.format,
-    Out: deriveOut(info.Path, s.format),
+    OutDir: outDir(s, info.Path),
+    OutName: s.outName.trim() || baseNameNoExt(info.Path),
+    OnExist: s.onExist,
     TargetKB: targetKB(s.targetMB),
   };
 }
@@ -78,7 +87,9 @@ export function buildImagesRequest(items: ImageInfo[], s: Settings): ImagesReque
     Dither: s.dither,
     WebPQuality: Math.round(s.webpQuality),
     Format: s.format,
-    Out: deriveImagesOut(items[0].Path, s.format),
+    OutDir: outDir(s, items[0].Path),
+    OutName: s.outName.trim() || "gifly",
+    OnExist: s.onExist,
     TargetKB: targetKB(s.targetMB),
   };
 }

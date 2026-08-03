@@ -2,6 +2,7 @@
   // Output format: GIF / WebP / APNG. Drives which Quality controls show and
   // the output file extension.
   import { settings } from "../lib/settings";
+  import { formatExt } from "../lib/format";
   import type { Format } from "../lib/settings";
 
   const FORMATS: { id: Format; label: string; hint: string }[] = [
@@ -13,14 +14,14 @@
   $: current = FORMATS.find((f) => f.id === $settings.format) ?? FORMATS[0];
 </script>
 
-<section class="section">
-  <span class="eyebrow">Format</span>
-  <div class="chip-row" role="group" aria-label="Output format">
-    {#each FORMATS as f (f.id)}
-      <button type="button" class="chip" class:active={$settings.format === f.id} on:click={() => ($settings.format = f.id)}>
-        {f.label}
-      </button>
-    {/each}
+<div class="card">
+  <div class="card-head"><span class="eyebrow">Format</span><span class="card-note">{formatExt($settings.format)}</span></div>
+  <div class="card-body">
+    <div class="seg" role="group" aria-label="Output format">
+      {#each FORMATS as f (f.id)}
+        <button type="button" class:on={$settings.format === f.id} on:click={() => ($settings.format = f.id)}>{f.label}</button>
+      {/each}
+    </div>
+    <p class="hint">{current.hint}</p>
   </div>
-  <p class="hint">{current.hint}</p>
-</section>
+</div>

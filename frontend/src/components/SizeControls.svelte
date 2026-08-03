@@ -25,30 +25,30 @@
   }
 </script>
 
-<section class="section">
-  <span class="eyebrow">Size</span>
-  <div class="chip-row" role="group" aria-label="Aspect ratio">
-    {#each ASPECTS as a (a.id)}
-      <button type="button" class="chip" class:active={$settings.aspect === a.id} on:click={() => setAspect(a.id)}>
-        {a.label}
-      </button>
-    {/each}
-  </div>
-  <div class="field-row">
-    <label class="field">
-      <span class="field-label">Width (px)</span>
-      <input class="mono" type="number" min="2" step="1" bind:value={$settings.width} on:input={onWidthInput} />
-    </label>
-    <div class="field">
-      <span class="field-label">Height</span>
-      <span class="mono readout">{outHeight}px</span>
+<div class="card">
+  <div class="card-head"><span class="eyebrow">Size</span><span class="card-note">{Math.round($settings.width)} &times; {outHeight}</span></div>
+  <div class="card-body">
+    <div class="seg" role="group" aria-label="Aspect ratio">
+      {#each ASPECTS as a (a.id)}
+        <button type="button" class:on={$settings.aspect === a.id} on:click={() => setAspect(a.id)}>{a.label}</button>
+      {/each}
+    </div>
+    <div class="row2">
+      <label class="field">
+        <span class="field-label">Width (px)</span>
+        <input class="mono" type="number" min="2" step="1" bind:value={$settings.width} on:input={onWidthInput} />
+      </label>
+      <div class="field">
+        <span class="field-label">Height</span>
+        <span class="readout">{outHeight} px</span>
+      </div>
+    </div>
+    <div class="chips" role="group" aria-label="Width presets">
+      {#each WIDTH_PRESETS as preset (preset)}
+        <button type="button" class="chip" class:on={Math.round($settings.width) === preset} on:click={() => pickWidth(preset)}>
+          {preset}
+        </button>
+      {/each}
     </div>
   </div>
-  <div class="chip-row" role="group" aria-label="Width presets">
-    {#each WIDTH_PRESETS as preset (preset)}
-      <button type="button" class="chip mono" class:active={Math.round($settings.width) === preset} on:click={() => pickWidth(preset)}>
-        {preset}
-      </button>
-    {/each}
-  </div>
-</section>
+</div>

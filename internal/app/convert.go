@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/hoijun-kim/gifly/internal/ffmpeg"
 	"github.com/hoijun-kim/gifly/internal/gifjob"
@@ -42,7 +43,14 @@ type VideoRequest struct {
 	// Format is the output container ("gif", "webp", "apng"); empty or
 	// unknown defaults to gif.
 	Format string
-	Out    string
+
+	// OutDir is the folder to write into; OutName is the base file name (no
+	// extension - the extension follows Format); OnExist is the collision policy
+	// ("overwrite", "number", "timestamp"). resolveOut turns these into the
+	// final path.
+	OutDir  string
+	OutName string
+	OnExist string
 
 	// TargetKB is the desired output size in kilobytes. 0 means no target: the
 	// first encode is kept as-is. When positive and the first encode comes out
@@ -74,7 +82,14 @@ type ImagesRequest struct {
 	// Format is the output container ("gif", "webp", "apng"); empty or
 	// unknown defaults to gif.
 	Format string
-	Out    string
+
+	// OutDir is the folder to write into; OutName is the base file name (no
+	// extension - the extension follows Format); OnExist is the collision policy
+	// ("overwrite", "number", "timestamp"). resolveOut turns these into the
+	// final path.
+	OutDir  string
+	OutName string
+	OnExist string
 
 	// TargetKB is the desired output size in kilobytes. 0 means no target: the
 	// first encode is kept as-is. When positive and the first encode comes out
@@ -271,6 +286,11 @@ func (a *App) ConvertVideo(req VideoRequest) (ConvertResult, error) {
 		return ConvertResult{}, err
 	}
 
+	out := a.resolveOut(req.OutDir, req.OutName, parseFormatReq(req.Format).Ext(), req.OnExist)
+	if req.OutDir != "" {
+		_ = os.MkdirAll(req.OutDir, 0o755)
+	}
+
 	// Create a cancellable context and store the cancel func under lock
 	ctx, cancel := context.WithCancel(context.Background())
 	a.mu.Lock()
@@ -286,7 +306,7 @@ func (a *App) ConvertVideo(req VideoRequest) (ConvertResult, error) {
 	totalMS := cfg.EndMS - cfg.StartMS
 
 	runner := ffmpeg.RunnerFunc(ffmpeg.Run)
-	result, err := gifjob.RunVideo(ctx, tools, runner, cfg, req.Out, func(p ffmpeg.Progress) {
+	result, err := gifjob.RunVideo(ctx, tools, runner, cfg, out, func(p ffmpeg.Progress) {
 		pct := percent(p.OutTimeMS, totalMS)
 		a.emitProgress("encoding", pct)
 	})
@@ -310,7 +330,7 @@ func (a *App) ConvertVideo(req VideoRequest) (ConvertResult, error) {
 			cfg.Width = width
 
 			a.emitProgress("fitting", 0)
-			result, err = gifjob.RunVideo(ctx, tools, runner, cfg, req.Out, func(p ffmpeg.Progress) {
+			result, err = gifjob.RunVideo(ctx, tools, runner, cfg, out, func(p ffmpeg.Progress) {
 				pct := percent(p.OutTimeMS, totalMS)
 				a.emitProgress("fitting", pct)
 			})
@@ -360,6 +380,11 @@ func (a *App) ConvertImages(req ImagesRequest) (ConvertResult, error) {
 		return ConvertResult{}, err
 	}
 
+	out := a.resolveOut(req.OutDir, req.OutName, parseFormatReq(req.Format).Ext(), req.OnExist)
+	if req.OutDir != "" {
+		_ = os.MkdirAll(req.OutDir, 0o755)
+	}
+
 	// Create a cancellable context and store the cancel func under lock
 	ctx, cancel := context.WithCancel(context.Background())
 	a.mu.Lock()
@@ -386,7 +411,7 @@ func (a *App) ConvertImages(req ImagesRequest) (ConvertResult, error) {
 		}
 	}
 
-	result, err := gifjob.RunImages(ctx, tools, runner, cfg, req.Out, imagesProgress("encoding"))
+	result, err := gifjob.RunImages(ctx, tools, runner, cfg, out, imagesProgress("encoding"))
 	if err != nil {
 		return ConvertResult{}, err
 	}
@@ -409,7 +434,7 @@ func (a *App) ConvertImages(req ImagesRequest) (ConvertResult, error) {
 			cfg.Height = gifjob.OutputHeight(frame.Width, frame.Height, aspect, width)
 
 			a.emitProgress("fitting", 0)
-			result, err = gifjob.RunImages(ctx, tools, runner, cfg, req.Out, imagesProgress("fitting"))
+			result, err = gifjob.RunImages(ctx, tools, runner, cfg, out, imagesProgress("fitting"))
 			if err != nil {
 				return ConvertResult{}, err
 			}
