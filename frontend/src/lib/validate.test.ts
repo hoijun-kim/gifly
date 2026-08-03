@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { videoValid, imagesValid } from './validate';
+import { videoValid, imagesValid, settingsValid } from './validate';
+import { defaultSettings } from './settings';
+
+describe('settingsValid', () => {
+  it('passes defaults, rejects bad width/speed/colors', () => {
+    expect(settingsValid(defaultSettings())).toBeNull();
+    expect(settingsValid({ ...defaultSettings(), width: 0 })).toMatch(/width/i);
+    expect(settingsValid({ ...defaultSettings(), speed: 0 })).toMatch(/speed/i);
+    expect(settingsValid({ ...defaultSettings(), speed: 9 })).toMatch(/speed/i);
+    expect(settingsValid({ ...defaultSettings(), colors: 1 })).toMatch(/color/i);
+  });
+});
 
 describe('validate', () => {
   it('accepts a good video config and rejects bad ones', () => {

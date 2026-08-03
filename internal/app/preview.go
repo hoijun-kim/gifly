@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 )
 
 // SetPreview stores the path to the current preview GIF, guarded by the lock.
@@ -47,8 +49,15 @@ func (a *App) PreviewHandler() http.Handler {
 			return
 		}
 
+		ct := "image/gif"
+		switch strings.ToLower(filepath.Ext(path)) {
+		case ".webp":
+			ct = "image/webp"
+		case ".png":
+			ct = "image/apng"
+		}
+		w.Header().Set("Content-Type", ct)
 		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Content-Type", "image/gif")
 		http.ServeContent(w, r, path, fi.ModTime(), f)
 	})
 }

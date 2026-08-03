@@ -38,9 +38,15 @@ export namespace app {
 	    Inputs: string[];
 	    FrameMS: number;
 	    Width: number;
+	    Aspect: string;
+	    Speed: number;
+	    Reverse: boolean;
+	    Boomerang: boolean;
 	    Loop: string;
 	    Colors: number;
-	    Dither: boolean;
+	    Dither: string;
+	    WebPQuality: number;
+	    Format: string;
 	    Out: string;
 	    TargetKB: number;
 	
@@ -53,9 +59,15 @@ export namespace app {
 	        this.Inputs = source["Inputs"];
 	        this.FrameMS = source["FrameMS"];
 	        this.Width = source["Width"];
+	        this.Aspect = source["Aspect"];
+	        this.Speed = source["Speed"];
+	        this.Reverse = source["Reverse"];
+	        this.Boomerang = source["Boomerang"];
 	        this.Loop = source["Loop"];
 	        this.Colors = source["Colors"];
 	        this.Dither = source["Dither"];
+	        this.WebPQuality = source["WebPQuality"];
+	        this.Format = source["Format"];
 	        this.Out = source["Out"];
 	        this.TargetKB = source["TargetKB"];
 	    }
@@ -86,9 +98,17 @@ export namespace app {
 	    EndMS: number;
 	    FPS: number;
 	    Width: number;
+	    SrcWidth: number;
+	    SrcHeight: number;
+	    Aspect: string;
+	    Speed: number;
+	    Reverse: boolean;
+	    Boomerang: boolean;
 	    Loop: string;
 	    Colors: number;
-	    Dither: boolean;
+	    Dither: string;
+	    WebPQuality: number;
+	    Format: string;
 	    Out: string;
 	    TargetKB: number;
 	
@@ -103,9 +123,17 @@ export namespace app {
 	        this.EndMS = source["EndMS"];
 	        this.FPS = source["FPS"];
 	        this.Width = source["Width"];
+	        this.SrcWidth = source["SrcWidth"];
+	        this.SrcHeight = source["SrcHeight"];
+	        this.Aspect = source["Aspect"];
+	        this.Speed = source["Speed"];
+	        this.Reverse = source["Reverse"];
+	        this.Boomerang = source["Boomerang"];
 	        this.Loop = source["Loop"];
 	        this.Colors = source["Colors"];
 	        this.Dither = source["Dither"];
+	        this.WebPQuality = source["WebPQuality"];
+	        this.Format = source["Format"];
 	        this.Out = source["Out"];
 	        this.TargetKB = source["TargetKB"];
 	    }

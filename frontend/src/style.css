@@ -110,9 +110,8 @@ body {
 
 /* The one centered working column, under the title bar - CENTER-ALIGNED per
    design brief: a comfortable reading width that narrows gracefully with
-   the window down to main.go's MinWidth (520px). TitleBar.svelte and
-   ModeSwitch.svelte own their own layout; this is what the active mode
-   (Video.svelte / Images.svelte) fills. */
+   the window down to main.go's MinWidth (520px). TitleBar.svelte owns its own
+   layout; this is what Workspace.svelte (the unified single screen) fills. */
 .work {
   flex: 1 1 auto;
   display: flex;

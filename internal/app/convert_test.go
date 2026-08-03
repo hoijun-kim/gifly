@@ -19,7 +19,7 @@ func TestPercentClamped(t *testing.T) {
 }
 
 func TestVideoConfigMapsRequest(t *testing.T) {
-	req := VideoRequest{Input: "in.mp4", StartMS: 1000, EndMS: 3000, FPS: 15, Width: 480, Loop: "forever", Colors: 200, Dither: true}
+	req := VideoRequest{Input: "in.mp4", StartMS: 1000, EndMS: 3000, FPS: 15, Width: 480, Loop: "forever", Colors: 200, Dither: "sierra2"}
 	c := videoConfig(req)
 	if c.Input != "in.mp4" || c.StartMS != 1000 || c.EndMS != 3000 || c.FPS != 15 || c.Width != 480 {
 		t.Errorf("videoConfig basic fields wrong: %+v", c)
@@ -33,7 +33,7 @@ func TestVideoConfigMapsRequest(t *testing.T) {
 }
 
 func TestImagesConfigMapsRequest(t *testing.T) {
-	req := ImagesRequest{Inputs: []string{"a.png", "b.png"}, FrameMS: 100, Width: 320, Loop: "once", Colors: 128, Dither: false}
+	req := ImagesRequest{Inputs: []string{"a.png", "b.png"}, FrameMS: 100, Width: 320, Loop: "once", Colors: 128, Dither: "none"}
 	c := imagesConfig(req, 240)
 	if len(c.Inputs) != 2 || c.Inputs[0] != "a.png" || c.Inputs[1] != "b.png" {
 		t.Errorf("imagesConfig inputs wrong: %+v", c.Inputs)
@@ -113,5 +113,47 @@ func TestParseLoopMode(t *testing.T) {
 		if got != tt.expected {
 			t.Errorf("parseLoopMode(%q) = %d, want %d", tt.input, got, tt.expected)
 		}
+	}
+}
+
+func TestVideoConfigMapsAllOptions(t *testing.T) {
+	req := VideoRequest{
+		Input: "in.mp4", StartMS: 100, EndMS: 2000, FPS: 20, Width: 320,
+		SrcWidth: 1280, SrcHeight: 720, Aspect: "1:1", Speed: 2, Reverse: true, Boomerang: true,
+		Loop: "once", Colors: 128, Dither: "bayer", WebPQuality: 80, Format: "webp",
+	}
+	c := videoConfig(req)
+	if c.Format != gifjob.FormatWebP {
+		t.Errorf("Format = %q, want webp", c.Format)
+	}
+	if c.Aspect != gifjob.AspectSquare {
+		t.Errorf("Aspect = %q, want 1:1", c.Aspect)
+	}
+	if c.Speed != 2 || !c.Reverse || !c.Boomerang {
+		t.Errorf("speed/reverse/boomerang = %v/%v/%v", c.Speed, c.Reverse, c.Boomerang)
+	}
+	if c.SrcWidth != 1280 || c.SrcHeight != 720 {
+		t.Errorf("src dims = %dx%d, want 1280x720", c.SrcWidth, c.SrcHeight)
+	}
+	if c.Quality.Dither != gifjob.DitherBayer || c.Quality.MaxColors != 128 || c.Quality.WebPQuality != 80 {
+		t.Errorf("quality = %+v", c.Quality)
+	}
+	if c.Loop != gifjob.LoopOnce {
+		t.Errorf("loop = %d, want once(-1)", int(c.Loop))
+	}
+}
+
+func TestParseReqDefaults(t *testing.T) {
+	if parseFormatReq("") != gifjob.FormatGIF || parseFormatReq("bogus") != gifjob.FormatGIF {
+		t.Error("empty/unknown format should default to gif")
+	}
+	if parseAspectReq("") != gifjob.AspectFree || parseAspectReq("bogus") != gifjob.AspectFree {
+		t.Error("empty/unknown aspect should default to free")
+	}
+	if parseDitherReq("") != gifjob.DitherSierra || parseDitherReq("bogus") != gifjob.DitherSierra {
+		t.Error("empty/unknown dither should default to sierra2")
+	}
+	if parseFormatReq("apng") != gifjob.FormatAPNG || parseAspectReq("9:16") != gifjob.AspectTall || parseDitherReq("floyd") != gifjob.DitherFloyd {
+		t.Error("known values must round-trip")
 	}
 }
