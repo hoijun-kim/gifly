@@ -38,15 +38,6 @@ func parseLoop(s string) (gifjob.LoopMode, error) {
 	return gifjob.LoopMode(n), nil
 }
 
-// imagesHeight picks the images canvas height: a positive -h override, else the
-// even height derived from the first frame's aspect at the output width.
-func imagesHeight(override, width, firstW, firstH int) int {
-	if override > 0 {
-		return override
-	}
-	return gifjob.CanvasHeight(firstW, firstH, width)
-}
-
 func parseFormat(s string) (gifjob.Format, error) {
 	f := gifjob.Format(s)
 	if !f.Valid() {
