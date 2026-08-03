@@ -1,6 +1,5 @@
 gifly.exe
 giflycli.exe
-/build/
 *.gif
 frontend/node_modules/
 frontend/dist/
