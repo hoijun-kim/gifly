@@ -109,3 +109,40 @@ func TestConvertVideoEndToEnd(t *testing.T) {
 		t.Errorf("result width = %d, want 120", res.Width)
 	}
 }
+
+func TestConvertFitsToTargetSize(t *testing.T) {
+	tools, err := ffmpeg.Tools()
+	if err != nil {
+		t.Skipf("no ffmpeg: %v", err)
+	}
+	dir := t.TempDir()
+	in := filepath.Join(dir, "in.mp4")
+	if err := ffmpeg.Run(context.Background(), tools.FFmpeg,
+		[]string{"-y", "-f", "lavfi", "-i", "testsrc=duration=2:size=320x240:rate=15", "-c:v", "mpeg4", "-q:v", "3", in}, nil); err != nil {
+		t.Fatalf("making test video: %v", err)
+	}
+	a := NewApp()
+	a.ctx = context.Background()
+	base := VideoRequest{Input: in, StartMS: 0, EndMS: 2000, FPS: 15, Width: 320, Loop: "forever", Colors: 256, Dither: true, Out: filepath.Join(dir, "base.gif")}
+	res0, err := a.ConvertVideo(base)
+	if err != nil {
+		t.Fatalf("baseline convert: %v", err)
+	}
+	// Target half the untargeted size, so the fit loop must shrink to reach it.
+	targetKB := int(res0.Bytes/1024/2) + 1
+	fit := base
+	fit.Out = filepath.Join(dir, "fit.gif")
+	fit.TargetKB = targetKB
+	res1, err := a.ConvertVideo(fit)
+	if err != nil {
+		t.Fatalf("targeted convert: %v", err)
+	}
+	if res1.Width >= 320 {
+		t.Errorf("fit did not shrink the width: %d (baseline 320)", res1.Width)
+	}
+	// Either it reached the target, or it bottomed out at the 120 floor.
+	if res1.Bytes > int64(targetKB)*1024 && res1.Width != 120 {
+		t.Errorf("fit output %d bytes over target %d KB but width %d is above the 120 floor",
+			res1.Bytes, targetKB, res1.Width)
+	}
+}
