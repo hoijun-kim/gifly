@@ -22,6 +22,18 @@ export function aspectHeight(srcW: number, srcH: number, outW: number): number {
   return h;
 }
 
+// Ballpark output-size estimate for the live "~N MB estimated" readout.
+// This is a heuristic, not a byte-accurate prediction: real GIF size depends
+// on frame content (motion, gradients, noise) that this function does not
+// see. bpp scales with the palette size (more colors -> less LZW-friendly
+// runs -> more bytes/pixel) and dithering (adds noise, which compresses
+// worse).
+export function estimateBytes(width: number, height: number, frames: number, colors: number, dither: boolean): number {
+  if (width <= 0 || height <= 0 || frames <= 0) return 0;
+  const bpp = (0.12 + (colors / 256) * 0.45) * (dither ? 1.15 : 1.0);
+  return Math.round(frames * width * height * bpp);
+}
+
 export function humanBytes(n: number): string {
   const units = ['B', 'KB', 'MB', 'GB'];
   let size = n;

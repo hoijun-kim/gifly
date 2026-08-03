@@ -1,14 +1,19 @@
 <script lang="ts">
   // The Video mode screen: pick a video, trim it, set fps/size/loop/quality,
   // convert, watch progress, and land on the result card. All the actual
-  // number crunching (timecodes, aspect math, validation) lives in
-  // ../lib/format and ../lib/validate; this component just wires state to
-  // the bound Go methods in ../lib/wails.
+  // number crunching (timecodes, aspect math, validation, size estimate)
+  // lives in ../lib/format and ../lib/validate; this component just wires
+  // state to the bound Go methods in ../lib/wails. Shared visual language
+  // (sections, fields, chips, buttons, progress, result card) lives in
+  // ../style.css so this stays consistent with ../modes/Images.svelte.
   import { onDestroy } from "svelte";
   import { PickVideo, ConvertVideo, Cancel, RevealOutput, onProgress } from "../lib/wails";
   import type { VideoInfo, VideoRequest, ConvertResult } from "../lib/wails";
-  import { msToTimecode, aspectHeight, humanBytes } from "../lib/format";
+  import { msToTimecode, aspectHeight, humanBytes, estimateBytes } from "../lib/format";
   import { videoValid } from "../lib/validate";
+
+  const FPS_PRESETS = [10, 15, 24, 30];
+  const WIDTH_PRESETS = [240, 360, 480, 640];
 
   let video: VideoInfo | null = null;
   let picking = false;
@@ -22,6 +27,7 @@
   let loopCount = 2;
   let colors = 256;
   let dither = true;
+  let targetMB = 0; // 0 or blank = no target
 
   let converting = false;
   let progressPhase = "";
@@ -39,6 +45,14 @@
   $: loopValue = loopChoice === "custom" ? String(Math.max(1, Math.round(loopCount))) : loopChoice;
   $: validationMessage = video ? videoValid({ startMs, endMs, fps, width }) : null;
   $: canConvert = !!video && !picking && !converting && !validationMessage;
+
+  // Blank/NaN/negative target inputs all read as "off".
+  $: targetMBSafe = Number.isFinite(targetMB) && targetMB > 0 ? targetMB : 0;
+  $: targetBytes = targetMBSafe > 0 ? Math.round(targetMBSafe * 1024 * 1024) : 0;
+  $: estFrames = fps > 0 && endMs > startMs ? Math.round((fps * (endMs - startMs)) / 1000) : 0;
+  $: rawEstimate = estimateBytes(Math.round(width), outHeight, estFrames, Math.round(colors), dither);
+  $: displayEstimate = targetBytes > 0 ? Math.min(rawEstimate, targetBytes) : rawEstimate;
+  $: estimateCapped = targetBytes > 0 && rawEstimate > targetBytes;
 
   function basename(path: string): string {
     const idx = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
@@ -82,6 +96,7 @@
       loopCount = 2;
       colors = 256;
       dither = true;
+      targetMB = 0;
       result = null;
       convertError = null;
     } catch (err) {
@@ -113,6 +128,7 @@
       Colors: Math.round(colors),
       Dither: dither,
       Out: deriveOutPath(video.Path),
+      TargetKB: Math.round(targetMBSafe * 1024),
     };
 
     try {
@@ -138,6 +154,15 @@
     if (result) RevealOutput(result.Path);
   }
 
+  // Back to the empty state so the user can pick a fresh source; the next
+  // pickVideo() call resets all settings (fps/width/loop/quality/target).
+  function makeAnother() {
+    video = null;
+    result = null;
+    convertError = null;
+    previewUrl = "";
+  }
+
   // Switching to Images mode unmounts this component (App.svelte's
   // {#if $mode==='video'}), which would otherwise leave the convert:progress
   // listener registered and an in-flight backend job running unmanaged.
@@ -156,13 +181,14 @@
       {#if pickError}<p class="error">{pickError}</p>{/if}
     </div>
   {:else}
-    <section class="panel">
+    <section class="section">
       <div class="source-row">
-        <span class="source-name" title={video.Path}>{basename(video.Path)}</span>
+        <span class="eyebrow">Source</span>
         <button class="btn-ghost" type="button" on:click={pickVideo} disabled={picking}>
           {picking ? "Opening..." : "Change"}
         </button>
       </div>
+      <span class="source-name" title={video.Path}>{basename(video.Path)}</span>
       <dl class="meta">
         <div class="meta-item">
           <dt>Duration</dt>
@@ -176,8 +202,8 @@
       {#if pickError}<p class="error">{pickError}</p>{/if}
     </section>
 
-    <section class="panel">
-      <h3 class="panel-title">Trim</h3>
+    <section class="section">
+      <span class="eyebrow">Timing</span>
       <div class="field-row">
         <label class="field">
           <span class="field-label">Start (s)</span>
@@ -206,17 +232,29 @@
           <span class="timecode mono">{msToTimecode(endMs)}</span>
         </label>
       </div>
+      <label class="field field-wide">
+        <span class="field-label">FPS</span>
+        <input class="mono" type="number" min="1" step="1" bind:value={fps} />
+      </label>
+      <div class="chip-row" role="group" aria-label="FPS presets">
+        {#each FPS_PRESETS as preset (preset)}
+          <button
+            type="button"
+            class="chip mono"
+            class:active={Math.round(fps) === preset}
+            on:click={() => (fps = preset)}
+          >
+            {preset}
+          </button>
+        {/each}
+      </div>
     </section>
 
-    <section class="panel">
-      <h3 class="panel-title">Output</h3>
+    <section class="section">
+      <span class="eyebrow">Size</span>
       <div class="field-row">
         <label class="field">
-          <span class="field-label">FPS</span>
-          <input class="mono" type="number" min="1" step="1" bind:value={fps} />
-        </label>
-        <label class="field">
-          <span class="field-label">Width</span>
+          <span class="field-label">Width (px)</span>
           <input class="mono" type="number" min="2" step="1" bind:value={width} />
         </label>
         <div class="field">
@@ -224,9 +262,25 @@
           <span class="mono readout">{outHeight}px</span>
         </div>
       </div>
+      <div class="chip-row" role="group" aria-label="Width presets">
+        {#each WIDTH_PRESETS as preset (preset)}
+          <button
+            type="button"
+            class="chip mono"
+            class:active={Math.round(width) === preset}
+            on:click={() => (width = preset)}
+          >
+            {preset}
+          </button>
+        {/each}
+      </div>
+    </section>
+
+    <section class="section">
+      <span class="eyebrow">Loop</span>
       <div class="field-row">
         <label class="field">
-          <span class="field-label">Loop</span>
+          <span class="field-label">Repeat</span>
           <select bind:value={loopChoice}>
             <option value="forever">Forever</option>
             <option value="once">Once</option>
@@ -242,8 +296,8 @@
       </div>
     </section>
 
-    <section class="panel">
-      <h3 class="panel-title">Quality</h3>
+    <section class="section">
+      <span class="eyebrow">Quality</span>
       <label class="field field-wide">
         <span class="field-label">Colors <span class="mono">{colors}</span></span>
         <input type="range" min="2" max="256" step="1" bind:value={colors} />
@@ -252,6 +306,22 @@
         <input type="checkbox" bind:checked={dither} />
         <span>Dither</span>
       </label>
+    </section>
+
+    <section class="section">
+      <span class="eyebrow">Output</span>
+      <label class="field field-wide">
+        <span class="field-label">Target size (MB) <span class="field-optional">optional</span></span>
+        <input class="mono" type="number" min="0" step="0.1" placeholder="off" bind:value={targetMB} />
+      </label>
+      {#if targetMBSafe > 0}
+        <p class="hint">gifly shrinks the width to fit ~{targetMBSafe} MB</p>
+      {/if}
+      <p class="estimate">
+        <span>Estimated size</span>
+        <span class="estimate-value mono">~{humanBytes(displayEstimate)}</span>
+        {#if estimateCapped}<span class="estimate-note">(capped by target)</span>{/if}
+      </p>
     </section>
 
     <div class="actions">
@@ -281,14 +351,15 @@
     {/if}
 
     {#if result}
-      <section class="panel result">
+      <section class="section result-card">
         <img class="preview" src={previewUrl} alt="Converted GIF preview" />
-        <div class="result-row">
-          <div class="result-meta">
-            <span class="mono">{result.Width}x{result.Height}</span>
-            <span class="mono">{humanBytes(result.Bytes)}</span>
-          </div>
+        <div class="result-meta">
+          <span class="mono">{result.Width}x{result.Height}</span>
+          <span class="mono">{humanBytes(result.Bytes)}</span>
+        </div>
+        <div class="btn-row">
           <button class="btn-ghost" type="button" on:click={openFolder}>Open folder</button>
+          <button class="btn-ghost" type="button" on:click={makeAnother}>Make another</button>
         </div>
       </section>
     {/if}
@@ -299,254 +370,6 @@
   .video-mode {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-  }
-
-  .pick-panel {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 48px 24px;
-    border: 1px dashed var(--line);
-    border-radius: var(--r-panel);
-    background: var(--panel);
-  }
-
-  .panel {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 14px 16px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--r-panel);
-  }
-
-  .panel-title {
-    margin: 0;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-
-  .source-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .source-name {
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .meta {
-    display: flex;
-    gap: 24px;
-    margin: 0;
-  }
-
-  .meta-item {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .meta-item dt {
-    font-size: 11px;
-    color: var(--faint);
-  }
-
-  .meta-item dd {
-    margin: 0;
-    color: var(--text);
-  }
-
-  .field-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    flex: 1 1 100px;
-  }
-
-  .field-wide {
-    flex-basis: 100%;
-  }
-
-  .field-label {
-    font-size: 12px;
-    color: var(--muted);
-  }
-
-  .field input[type="number"],
-  .field select {
-    padding: 6px 8px;
-    background: var(--panel-2);
-    border: 1px solid var(--line);
-    border-radius: var(--r);
-    color: var(--text);
-    font-family: var(--ui);
-    font-size: 13px;
-  }
-
-  .field input[type="range"] {
-    accent-color: var(--accent);
-  }
-
-  .readout {
-    padding: 6px 0;
-    color: var(--muted);
-  }
-
-  .timecode {
-    color: var(--faint);
-    font-size: 12px;
-  }
-
-  .toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    width: fit-content;
-    color: var(--text);
-    font-size: 13px;
-  }
-
-  .toggle input {
-    accent-color: var(--accent);
-  }
-
-  .actions {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .hint {
-    margin: 0;
-    color: var(--muted);
-    font-size: 12px;
-  }
-
-  .error {
-    margin: 0;
-    color: var(--stop);
-    font-size: 13px;
-  }
-
-  .btn-primary {
-    padding: 10px 16px;
-    border: none;
-    border-radius: var(--r);
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-family: var(--ui);
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .btn-primary:disabled {
-    background: var(--panel-2);
-    color: var(--faint);
-    cursor: not-allowed;
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    background: var(--accent-hi);
-  }
-
-  .btn-ghost {
-    padding: 7px 12px;
-    border: 1px solid var(--line);
-    border-radius: var(--r);
-    background: transparent;
-    color: var(--text);
-    font-family: var(--ui);
-    font-size: 13px;
-    cursor: pointer;
-  }
-
-  .btn-ghost:hover {
-    background: var(--panel-2);
-  }
-
-  .progress {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .progress-track {
-    height: 8px;
-    border-radius: 999px;
-    background: var(--panel-2);
-    border: 1px solid var(--line);
-    overflow: hidden;
-  }
-
-  .progress-fill {
-    height: 100%;
-    background: var(--accent);
-  }
-
-  .progress-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .progress-phase {
-    flex: 1 1 auto;
-    color: var(--muted);
-    font-size: 12px;
-    text-transform: capitalize;
-  }
-
-  .result {
-    align-items: stretch;
-  }
-
-  .preview {
-    width: 100%;
-    max-height: 320px;
-    object-fit: contain;
-    border-radius: var(--r);
-    background: var(--panel-2);
-  }
-
-  .result-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .result-meta {
-    display: flex;
-    gap: 16px;
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .btn-primary,
-    .btn-ghost {
-      transition: background-color 120ms ease;
-    }
-
-    .progress-fill {
-      transition: width 150ms ease;
-    }
+    gap: 18px;
   }
 </style>
