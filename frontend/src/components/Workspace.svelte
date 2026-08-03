@@ -7,12 +7,13 @@
   import { onDestroy } from "svelte";
   import { source } from "../lib/source";
   import { settings } from "../lib/settings";
-  import { ConvertVideo, ConvertImages, Cancel, RevealOutput, onProgress } from "../lib/wails";
+  import { ConvertVideo, ConvertImages, Cancel, RevealOutput, CopyOutput, onProgress } from "../lib/wails";
   import type { ConvertResult } from "../lib/wails";
   import { humanBytes, formatLabel, outputHeight, estimateBytes } from "../lib/format";
   import { videoValid, imagesValid, settingsValid } from "../lib/validate";
   import { buildVideoRequest, buildImagesRequest } from "../lib/request";
   import SourcePanel from "./SourcePanel.svelte";
+  import SaveControls from "./SaveControls.svelte";
   import VideoTiming from "./VideoTiming.svelte";
   import ImagesTiming from "./ImagesTiming.svelte";
   import FormatPicker from "./FormatPicker.svelte";
@@ -33,8 +34,15 @@
   let result: ConvertResult | null = null;
   let convertError: string | null = null;
   let previewUrl = "";
+  let copied = false;
 
   $: src = $source;
+  $: savedName = result ? basename(result.Path) : "";
+
+  function basename(path: string): string {
+    const idx = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
+    return idx >= 0 ? path.slice(idx + 1) : path;
+  }
 
   // Initialize the trim window once per newly picked video (and clear any prior
   // result); switching away from a video resets the guard so the next video
@@ -111,6 +119,7 @@
       }
       result = res;
       previewUrl = `/preview.gif?t=${Date.now()}`;
+      if ($settings.autoReveal) RevealOutput(res.Path);
     } catch (err) {
       convertError = errorMessage(err);
     } finally {
@@ -128,6 +137,21 @@
 
   function openFolder() {
     if (result) RevealOutput(result.Path);
+  }
+
+  // Copy the finished file itself to the clipboard, ready to paste into a chat
+  // app. Best-effort - a clipboard failure just leaves the button unchanged.
+  let copyTimer: ReturnType<typeof setTimeout> | null = null;
+  async function copyOut() {
+    if (!result) return;
+    try {
+      await CopyOutput(result.Path);
+      copied = true;
+      if (copyTimer) clearTimeout(copyTimer);
+      copyTimer = setTimeout(() => (copied = false), 1500);
+    } catch {
+      // clipboard is best-effort
+    }
   }
 
   function makeAnother() {
@@ -176,10 +200,12 @@
             <span class="mono">{result.Width}x{result.Height}</span>
             <span class="mono">{humanBytes(result.Bytes)}</span>
           </div>
+          <div class="saved-name mono" title={result.Path}>{savedName}</div>
           <div class="dz-actions">
+            <button class="btn ghost block sm" type="button" on:click={copyOut}>{copied ? "Copied!" : "Copy"}</button>
             <button class="btn ghost block sm" type="button" on:click={openFolder}>Open folder</button>
-            <button class="btn primary block sm" type="button" on:click={makeAnother}>Make another</button>
           </div>
+          <button class="btn primary block sm" type="button" on:click={makeAnother}>Make another</button>
         {:else if converting}
           <div class="prog">
             <div class="prog-track"><div class="prog-fill" style="width:{progressPercent}%"></div></div>
@@ -224,6 +250,7 @@
         <PlaybackControls />
         <QualityControls />
         <OutputControls />
+        <SaveControls />
       </div>
     </div>
   </div>
@@ -234,5 +261,13 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+  .saved-name {
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>

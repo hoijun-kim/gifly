@@ -5,6 +5,8 @@ import {
   Cancel as CancelBinding,
   ConvertImages as ConvertImagesBinding,
   ConvertVideo as ConvertVideoBinding,
+  CopyOutput as CopyOutputBinding,
+  PickFolder as PickFolderBinding,
   PickImages as PickImagesBinding,
   PickVideo as PickVideoBinding,
   RevealOutput as RevealOutputBinding,
@@ -35,10 +37,12 @@ export interface ProgressEvent {
 // Bound Go methods (internal/app/app.go, media.go, convert.go, preview.go).
 export const PickVideo = PickVideoBinding;
 export const PickImages = PickImagesBinding;
+export const PickFolder = PickFolderBinding;
 export const ConvertVideo = ConvertVideoBinding;
 export const ConvertImages = ConvertImagesBinding;
 export const Cancel = CancelBinding;
 export const RevealOutput = RevealOutputBinding;
+export const CopyOutput = CopyOutputBinding;
 
 // Wails JS runtime - only the pieces the shell and modes need.
 export const WindowMinimise = WindowMinimiseRuntime;

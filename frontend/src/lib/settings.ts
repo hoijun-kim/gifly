@@ -4,6 +4,8 @@ export type Format = "gif" | "webp" | "apng";
 export type Aspect = "" | "1:1" | "16:9" | "9:16";
 export type DitherMethod = "none" | "bayer" | "sierra2" | "floyd";
 export type LoopChoice = "forever" | "once" | "custom";
+export type FolderMode = "source" | "custom";
+export type OnExist = "overwrite" | "number" | "timestamp";
 
 // Settings holds every SHARED output option (everything that does not depend on
 // whether the source is a video or images). Source-specific timing (trim, fps,
@@ -24,6 +26,13 @@ export interface Settings {
   webpQuality: number; // WebP only, 0..100
   targetMB: number; // 0 = no target
   preset: string; // "" | "discord" | "slack" | "twitter"
+
+  // Save destination.
+  outFolderMode: FolderMode; // "source" = beside the source, "custom" = outFolder
+  outFolder: string; // chosen folder when outFolderMode is "custom"
+  outName: string; // base file name (no extension); "" = derive from source
+  onExist: OnExist; // collision policy when the file already exists
+  autoReveal: boolean; // reveal the file in Explorer when done
 }
 
 export function defaultSettings(): Settings {
@@ -43,6 +52,11 @@ export function defaultSettings(): Settings {
     webpQuality: 75,
     targetMB: 0,
     preset: "",
+    outFolderMode: "source",
+    outFolder: "",
+    outName: "",
+    onExist: "number",
+    autoReveal: false,
   };
 }
 

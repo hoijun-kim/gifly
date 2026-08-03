@@ -47,7 +47,9 @@ export namespace app {
 	    Dither: string;
 	    WebPQuality: number;
 	    Format: string;
-	    Out: string;
+	    OutDir: string;
+	    OutName: string;
+	    OnExist: string;
 	    TargetKB: number;
 	
 	    static createFrom(source: any = {}) {
@@ -68,7 +70,9 @@ export namespace app {
 	        this.Dither = source["Dither"];
 	        this.WebPQuality = source["WebPQuality"];
 	        this.Format = source["Format"];
-	        this.Out = source["Out"];
+	        this.OutDir = source["OutDir"];
+	        this.OutName = source["OutName"];
+	        this.OnExist = source["OnExist"];
 	        this.TargetKB = source["TargetKB"];
 	    }
 	}
@@ -109,7 +113,9 @@ export namespace app {
 	    Dither: string;
 	    WebPQuality: number;
 	    Format: string;
-	    Out: string;
+	    OutDir: string;
+	    OutName: string;
+	    OnExist: string;
 	    TargetKB: number;
 	
 	    static createFrom(source: any = {}) {
@@ -134,7 +140,9 @@ export namespace app {
 	        this.Dither = source["Dither"];
 	        this.WebPQuality = source["WebPQuality"];
 	        this.Format = source["Format"];
-	        this.Out = source["Out"];
+	        this.OutDir = source["OutDir"];
+	        this.OutName = source["OutName"];
+	        this.OnExist = source["OnExist"];
 	        this.TargetKB = source["TargetKB"];
 	    }
 	}

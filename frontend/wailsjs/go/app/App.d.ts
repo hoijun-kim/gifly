@@ -9,6 +9,10 @@ export function ConvertImages(arg1:app.ImagesRequest):Promise<app.ConvertResult>
 
 export function ConvertVideo(arg1:app.VideoRequest):Promise<app.ConvertResult>;
 
+export function CopyOutput(arg1:string):Promise<void>;
+
+export function PickFolder():Promise<string>;
+
 export function PickImages():Promise<Array<app.ImageInfo>>;
 
 export function PickVideo():Promise<app.VideoInfo>;
