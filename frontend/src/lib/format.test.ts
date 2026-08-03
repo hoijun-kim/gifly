@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { msToTimecode, fpsFromFrameMs, frameMsFromFps, aspectHeight, humanBytes, estimateBytes } from './format';
+import { msToTimecode, fpsFromFrameMs, frameMsFromFps, aspectHeight, humanBytes, outputHeight, formatExt, formatLabel, estimateBytes } from './format';
 
 describe('format', () => {
   it('formats ms as mm:ss.mmm', () => {
@@ -19,26 +19,56 @@ describe('format', () => {
   it('formats bytes', () => {
     expect(humanBytes(1536)).toBe('1.5 KB');
   });
-  it('estimates output bytes as a ballpark heuristic', () => {
-    // Degenerate inputs (any non-positive dimension) -> 0.
-    expect(estimateBytes(0, 480, 10, 256, true)).toBe(0);
-    expect(estimateBytes(640, 0, 10, 256, true)).toBe(0);
-    expect(estimateBytes(640, 480, 0, 256, true)).toBe(0);
-    expect(estimateBytes(640, 480, -1, 256, true)).toBe(0);
+});
 
-    // Grows with frame count, all else equal.
-    const fewFrames = estimateBytes(640, 480, 5, 128, false);
-    const moreFrames = estimateBytes(640, 480, 20, 128, false);
-    expect(moreFrames).toBeGreaterThan(fewFrames);
+describe('outputHeight', () => {
+  it('free aspect follows the source ratio (even)', () => {
+    expect(outputHeight(1600, 900, '', 800)).toBe(450);
+  });
+  it('1:1 is square, 16:9 and 9:16 follow the ratio (even)', () => {
+    expect(outputHeight(1600, 900, '1:1', 200)).toBe(200);
+    expect(outputHeight(1600, 900, '16:9', 200) % 2).toBe(0);
+    expect(outputHeight(1600, 900, '9:16', 200)).toBe(356);
+  });
+  it('degenerate inputs floor at 2', () => {
+    expect(outputHeight(0, 0, '', 0)).toBe(2);
+  });
+});
 
-    // Grows with palette size, all else equal.
-    const fewColors = estimateBytes(640, 480, 10, 16, false);
-    const moreColors = estimateBytes(640, 480, 10, 256, false);
+describe('format ext/label', () => {
+  it('maps each format', () => {
+    expect(formatExt('gif')).toBe('.gif');
+    expect(formatExt('webp')).toBe('.webp');
+    expect(formatExt('apng')).toBe('.png');
+    expect(formatLabel('apng')).toBe('APNG');
+  });
+});
+
+describe('estimateBytes', () => {
+  const base = { width: 200, height: 200, frames: 20, colors: 256, dither: true, webpQuality: 75 };
+  it('is zero for non-positive dimensions', () => {
+    expect(estimateBytes({ ...base, format: 'gif', width: 0 })).toBe(0);
+    expect(estimateBytes({ ...base, format: 'gif', height: 0 })).toBe(0);
+    expect(estimateBytes({ ...base, format: 'gif', frames: 0 })).toBe(0);
+  });
+  it('orders apng > gif > webp for the same content', () => {
+    const gif = estimateBytes({ ...base, format: 'gif' });
+    const webp = estimateBytes({ ...base, format: 'webp' });
+    const apng = estimateBytes({ ...base, format: 'apng' });
+    expect(webp).toBeLessThan(gif);
+    expect(apng).toBeGreaterThan(gif);
+  });
+  it('webp estimate grows with quality', () => {
+    const lo = estimateBytes({ ...base, format: 'webp', webpQuality: 20 });
+    const hi = estimateBytes({ ...base, format: 'webp', webpQuality: 95 });
+    expect(hi).toBeGreaterThan(lo);
+  });
+  it('gif estimate grows with colors and dithering', () => {
+    const fewColors = estimateBytes({ ...base, format: 'gif', colors: 16, dither: false });
+    const moreColors = estimateBytes({ ...base, format: 'gif', colors: 256, dither: false });
     expect(moreColors).toBeGreaterThan(fewColors);
-
-    // Dithering adds noise that compresses worse -> larger estimate.
-    const noDither = estimateBytes(640, 480, 10, 128, false);
-    const withDither = estimateBytes(640, 480, 10, 128, true);
+    const noDither = estimateBytes({ ...base, format: 'gif', colors: 128, dither: false });
+    const withDither = estimateBytes({ ...base, format: 'gif', colors: 128, dither: true });
     expect(withDither).toBeGreaterThan(noDither);
   });
 });
