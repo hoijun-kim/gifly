@@ -10,12 +10,17 @@
   import { settings } from "../lib/settings";
   import { ConvertVideo, ConvertImages, Cancel, RevealOutput, onProgress } from "../lib/wails";
   import type { ConvertResult } from "../lib/wails";
-  import { humanBytes, formatLabel } from "../lib/format";
+  import { humanBytes, formatLabel, outputHeight, estimateBytes } from "../lib/format";
   import { videoValid, imagesValid, settingsValid } from "../lib/validate";
   import { buildVideoRequest, buildImagesRequest } from "../lib/request";
   import SourcePanel from "./SourcePanel.svelte";
   import VideoTiming from "./VideoTiming.svelte";
   import ImagesTiming from "./ImagesTiming.svelte";
+  import FormatPicker from "./FormatPicker.svelte";
+  import SizeControls from "./SizeControls.svelte";
+  import PlaybackControls from "./PlaybackControls.svelte";
+  import QualityControls from "./QualityControls.svelte";
+  import OutputControls from "./OutputControls.svelte";
 
   let startSec = 0;
   let endSec = 0;
@@ -58,6 +63,29 @@
         : null;
   $: validationMessage = settingsValid($settings) ?? timingMessage;
   $: canConvert = !!src && !converting && !validationMessage;
+
+  // Live output-height and size-estimate derived from the source dims + settings.
+  $: srcW = src && src.kind === "video" ? src.info.Width : src && src.kind === "images" ? (src.items[0]?.Width ?? 0) : 0;
+  $: srcH = src && src.kind === "video" ? src.info.Height : src && src.kind === "images" ? (src.items[0]?.Height ?? 0) : 0;
+  $: outHeight = outputHeight(srcW, srcH, $settings.aspect, $settings.width);
+  $: frames =
+    src && src.kind === "video"
+      ? Math.round(($settings.fps * Math.max(0, endMs - startMs)) / 1000)
+      : src && src.kind === "images"
+        ? src.items.length
+        : 0;
+  $: rawEstimate = estimateBytes({
+    format: $settings.format,
+    width: Math.round($settings.width),
+    height: outHeight,
+    frames,
+    colors: Math.round($settings.colors),
+    dither: $settings.dither !== "none",
+    webpQuality: $settings.webpQuality,
+  });
+  $: targetBytes = $settings.targetMB > 0 ? Math.round($settings.targetMB * 1024 * 1024) : 0;
+  $: displayEstimate = targetBytes > 0 ? Math.min(rawEstimate, targetBytes) : rawEstimate;
+  $: estimateCapped = targetBytes > 0 && rawEstimate > targetBytes;
 
   function errorMessage(err: unknown): string {
     return err instanceof Error ? err.message : String(err);
@@ -127,6 +155,12 @@
     {:else}
       <ImagesTiming />
     {/if}
+
+    <FormatPicker />
+    <SizeControls {outHeight} />
+    <PlaybackControls />
+    <QualityControls />
+    <OutputControls {displayEstimate} {estimateCapped} />
 
     <div class="actions">
       <button class="btn-primary" type="button" on:click={convert} disabled={!canConvert}>
