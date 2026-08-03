@@ -3,6 +3,7 @@ package gifjob
 import (
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -13,22 +14,10 @@ func secs(ms int64) string {
 	return fmt.Sprintf("%.3f", float64(ms)/1000)
 }
 
-func ditherArg(q Quality) string {
-	return q.Dither.ffmpeg()
-}
-
 // scaleChain is the shared scale filter: force width, keep aspect, even height,
 // lanczos resampling.
 func scaleChain(width int) string {
 	return fmt.Sprintf("scale=%d:-2:flags=lanczos", width)
-}
-
-func palettegen(width int, q Quality) string {
-	return scaleChain(width) + fmt.Sprintf(",palettegen=max_colors=%d:stats_mode=diff", q.MaxColors)
-}
-
-func paletteuse(width int, q Quality) string {
-	return scaleChain(width) + fmt.Sprintf("[x];[x][1:v]paletteuse=dither=%s", ditherArg(q))
 }
 
 // VideoArgs builds the ffmpeg passes for a video job. GIF is two passes
@@ -66,21 +55,66 @@ func VideoArgs(c VideoConfig, palettePath, outPath string) (passes [][]string) {
 	}
 }
 
-// ImagesArgs builds the two ffmpeg passes for an images job, reading the ordered
-// frames through the concat demuxer (frame durations come from listPath, so no
-// fps filter is applied).
-func ImagesArgs(c ImagesConfig, listPath, palettePath, outPath string) (pass1, pass2 []string) {
-	pass1 = []string{
-		"-y", "-f", "concat", "-safe", "0", "-i", listPath,
-		"-vf", palettegen(c.Width, c.Quality),
-		palettePath,
+// frameOrder returns the play order of the normalized frames after applying
+// reverse (flip the sequence) then boomerang (append the sequence back minus
+// its last frame, so the turn-around frame is not duplicated). It never mutates
+// its input.
+func frameOrder(frames []string, reverse, boomerang bool) []string {
+	out := make([]string, len(frames))
+	copy(out, frames)
+	if reverse {
+		for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+			out[i], out[j] = out[j], out[i]
+		}
 	}
-	pass2 = []string{
-		"-y", "-f", "concat", "-safe", "0", "-i", listPath, "-i", palettePath,
-		"-lavfi", paletteuse(c.Width, c.Quality),
-		"-loop", strconv.Itoa(int(c.Loop)), outPath,
+	if boomerang && len(out) > 1 {
+		for i := len(out) - 2; i >= 0; i-- {
+			out = append(out, out[i])
+		}
 	}
-	return pass1, pass2
+	return out
+}
+
+// effectiveFrameMS scales the per-frame duration by playback speed (2x speed
+// halves each frame's on-screen time). speed <= 0 means normal. The result is
+// never below 1 ms.
+func effectiveFrameMS(frameMS int, speed float64) int {
+	if speed <= 0 {
+		return frameMS
+	}
+	ms := int(math.Round(float64(frameMS) / speed))
+	if ms < 1 {
+		ms = 1
+	}
+	return ms
+}
+
+// ImagesArgs builds the ffmpeg passes for an images job reading the ordered,
+// pre-normalized frames through the concat demuxer. GIF is palettegen then
+// paletteuse; WebP and APNG are a single encode pass. Frame durations come from
+// listPath, so no fps filter is applied. palettePath is used only by GIF.
+func ImagesArgs(c ImagesConfig, listPath, palettePath, outPath string) (passes [][]string) {
+	in := []string{"-y", "-f", "concat", "-safe", "0", "-i", listPath}
+	clone := func() []string { return append([]string(nil), in...) }
+
+	switch c.Format {
+	case FormatWebP:
+		flag, val := loopArgs(FormatWebP, c.Loop)
+		p := append(clone(), "-c:v", "libwebp_anim", flag, val, "-q:v", strconv.Itoa(c.Quality.WebPQuality), outPath)
+		return [][]string{p}
+	case FormatAPNG:
+		flag, val := loopArgs(FormatAPNG, c.Loop)
+		p := append(clone(), "-f", "apng", flag, val, outPath)
+		return [][]string{p}
+	default: // GIF
+		p1 := append(clone(), "-vf", scaleChain(c.Width)+","+palettegenTail(c.Quality), palettePath)
+		flag, val := loopArgs(FormatGIF, c.Loop)
+		p2 := clone()
+		p2 = append(p2, "-i", palettePath,
+			"-lavfi", scaleChain(c.Width)+"[x];[x][1:v]"+paletteuseTail(c.Quality),
+			flag, val, outPath)
+		return [][]string{p1, p2}
+	}
 }
 
 // escapeConcatPath escapes single quotes in a path for the ffmpeg concat demuxer.

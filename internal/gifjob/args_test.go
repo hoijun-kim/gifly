@@ -62,34 +62,81 @@ func TestVideoArgsAPNGLoopOnce(t *testing.T) {
 	}
 }
 
-func TestImagesArgsAndConcatList(t *testing.T) {
-	c := ImagesConfig{Inputs: []string{"a.png", "b.png"}, FrameMS: 100, Width: 400, Loop: 3, Quality: Quality{MaxColors: 256, Dither: DitherSierra}}
-	p1, p2 := ImagesArgs(c, "list.txt", "pal.png", "out.gif")
-
+func TestImagesArgsGIF(t *testing.T) {
+	c := ImagesConfig{Inputs: []string{"a.png", "b.png"}, FrameMS: 100, Width: 400, Loop: 3, Format: FormatGIF, Quality: Quality{MaxColors: 256, Dither: DitherSierra}}
+	passes := ImagesArgs(c, "list.txt", "pal.png", "out.gif")
+	if len(passes) != 2 {
+		t.Fatalf("GIF images should be 2 passes, got %d", len(passes))
+	}
 	want1 := []string{
 		"-y", "-f", "concat", "-safe", "0", "-i", "list.txt",
-		"-vf", "scale=400:-2:flags=lanczos,palettegen=max_colors=256:stats_mode=diff",
-		"pal.png",
+		"-vf", "scale=400:-2:flags=lanczos,palettegen=max_colors=256:stats_mode=diff", "pal.png",
 	}
-	if !reflect.DeepEqual(p1, want1) {
-		t.Errorf("images pass1 =\n%v\nwant\n%v", p1, want1)
+	if !reflect.DeepEqual(passes[0], want1) {
+		t.Errorf("images pass1 =\n%v\nwant\n%v", passes[0], want1)
 	}
 	want2 := []string{
 		"-y", "-f", "concat", "-safe", "0", "-i", "list.txt", "-i", "pal.png",
-		"-lavfi", "scale=400:-2:flags=lanczos[x];[x][1:v]paletteuse=dither=sierra2_4a",
-		"-loop", "3", "out.gif",
+		"-lavfi", "scale=400:-2:flags=lanczos[x];[x][1:v]paletteuse=dither=sierra2_4a", "-loop", "3", "out.gif",
 	}
-	if !reflect.DeepEqual(p2, want2) {
-		t.Errorf("images pass2 =\n%v\nwant\n%v", p2, want2)
+	if !reflect.DeepEqual(passes[1], want2) {
+		t.Errorf("images pass2 =\n%v\nwant\n%v", passes[1], want2)
 	}
+}
 
-	var b strings.Builder
-	if err := WriteConcatList(&b, c.Inputs, c.FrameMS); err != nil {
-		t.Fatal(err)
+func TestImagesArgsWebPAndAPNG(t *testing.T) {
+	c := ImagesConfig{Inputs: []string{"a.png"}, FrameMS: 100, Width: 400, Loop: 3, Format: FormatWebP, Quality: Quality{WebPQuality: 70}}
+	p := ImagesArgs(c, "list.txt", "pal.png", "out.webp")
+	wantW := []string{"-y", "-f", "concat", "-safe", "0", "-i", "list.txt", "-c:v", "libwebp_anim", "-loop", "3", "-q:v", "70", "out.webp"}
+	if len(p) != 1 || !reflect.DeepEqual(p[0], wantW) {
+		t.Errorf("webp images =\n%v\nwant\n%v", p, wantW)
 	}
-	want := "file 'a.png'\nduration 0.100\nfile 'b.png'\nduration 0.100\nfile 'b.png'\n"
-	if b.String() != want {
-		t.Errorf("concat list =\n%q\nwant\n%q", b.String(), want)
+	c.Format = FormatAPNG
+	p = ImagesArgs(c, "list.txt", "pal.png", "out.png")
+	wantA := []string{"-y", "-f", "concat", "-safe", "0", "-i", "list.txt", "-f", "apng", "-plays", "3", "out.png"}
+	if len(p) != 1 || !reflect.DeepEqual(p[0], wantA) {
+		t.Errorf("apng images =\n%v\nwant\n%v", p, wantA)
+	}
+}
+
+func TestFrameOrder(t *testing.T) {
+	in := []string{"a", "b", "c"}
+	if got := frameOrder(in, false, false); !reflect.DeepEqual(got, []string{"a", "b", "c"}) {
+		t.Errorf("plain = %v", got)
+	}
+	if got := frameOrder(in, true, false); !reflect.DeepEqual(got, []string{"c", "b", "a"}) {
+		t.Errorf("reverse = %v", got)
+	}
+	if got := frameOrder(in, false, true); !reflect.DeepEqual(got, []string{"a", "b", "c", "b", "a"}) {
+		t.Errorf("boomerang = %v", got)
+	}
+	if got := frameOrder(in, true, true); !reflect.DeepEqual(got, []string{"c", "b", "a", "b", "c"}) {
+		t.Errorf("reverse+boomerang = %v", got)
+	}
+	// frameOrder must not mutate its input.
+	if !reflect.DeepEqual(in, []string{"a", "b", "c"}) {
+		t.Errorf("input was mutated: %v", in)
+	}
+}
+
+func TestEffectiveFrameMS(t *testing.T) {
+	cases := []struct {
+		ms    int
+		speed float64
+		want  int
+	}{
+		{100, 1.0, 100},
+		{100, 2.0, 50},
+		{100, 0.5, 200},
+		{100, 0, 100},  // speed 0 -> normal
+		{100, -1, 100}, // negative -> normal
+		{3, 2.0, 2},    // rounds; never below 1
+		{1, 4.0, 1},    // floor at 1
+	}
+	for _, c := range cases {
+		if got := effectiveFrameMS(c.ms, c.speed); got != c.want {
+			t.Errorf("effectiveFrameMS(%d,%v) = %d, want %d", c.ms, c.speed, got, c.want)
+		}
 	}
 }
 
