@@ -138,3 +138,41 @@ func TestPaletteTails(t *testing.T) {
 		t.Errorf("paletteuseTail = %q", got)
 	}
 }
+
+func TestFilterChainAndGraph(t *testing.T) {
+	// Plain: fps + scale only.
+	c := VideoConfig{FPS: 15, Width: 480}
+	if got := filterChain(c); got != "fps=15,scale=480:-2:flags=lanczos" {
+		t.Errorf("plain chain = %q", got)
+	}
+	if got := videoGraph(c); got != "[0:v]fps=15,scale=480:-2:flags=lanczos[v]" {
+		t.Errorf("plain graph = %q", got)
+	}
+	// Everything on: crop(1:1) + fps + scale + speed 2x + reverse, plus boomerang.
+	c2 := VideoConfig{FPS: 12, Width: 200, Aspect: AspectSquare, Speed: 2.0, Reverse: true, Boomerang: true}
+	wantChain := "crop='min(iw,ih)':'min(iw,ih)',fps=12,scale=200:-2:flags=lanczos,setpts=0.5000*PTS,reverse"
+	if got := filterChain(c2); got != wantChain {
+		t.Errorf("full chain =\n%q\nwant\n%q", got, wantChain)
+	}
+	wantGraph := "[0:v]" + wantChain + ",split[a][b];[b]reverse[r];[a][r]concat=n=2:v=1[v]"
+	if got := videoGraph(c2); got != wantGraph {
+		t.Errorf("boomerang graph =\n%q\nwant\n%q", got, wantGraph)
+	}
+	// Speed 1.0 and speed 0 both omit setpts.
+	if setptsExpr(1.0) != "" || setptsExpr(0) != "" {
+		t.Errorf("setpts for 1.0/0 should be empty")
+	}
+	if got := setptsExpr(0.5); got != "setpts=2.0000*PTS" {
+		t.Errorf("setpts(0.5) = %q, want setpts=2.0000*PTS", got)
+	}
+	// Aspect crop expressions.
+	if cropExpr(AspectFree) != "" {
+		t.Error("free aspect must produce no crop")
+	}
+	if got := cropExpr(AspectWide); got != "crop='min(iw,ih*16/9)':'min(ih,iw*9/16)'" {
+		t.Errorf("16:9 crop = %q", got)
+	}
+	if got := cropExpr(AspectTall); got != "crop='min(iw,ih*9/16)':'min(ih,iw*16/9)'" {
+		t.Errorf("9:16 crop = %q", got)
+	}
+}

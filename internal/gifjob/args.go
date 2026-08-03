@@ -144,3 +144,59 @@ func palettegenTail(q Quality) string {
 func paletteuseTail(q Quality) string {
 	return "paletteuse=dither=" + q.Dither.ffmpeg()
 }
+
+// cropExpr returns the ffmpeg crop filter that center-crops the source to the
+// aspect ratio, or "" for AspectFree. ffmpeg centers the crop when x/y are
+// omitted.
+func cropExpr(a Aspect) string {
+	switch a {
+	case AspectSquare:
+		return "crop='min(iw,ih)':'min(iw,ih)'"
+	case AspectWide: // 16:9
+		return "crop='min(iw,ih*16/9)':'min(ih,iw*9/16)'"
+	case AspectTall: // 9:16
+		return "crop='min(iw,ih*9/16)':'min(ih,iw*16/9)'"
+	default:
+		return ""
+	}
+}
+
+// setptsExpr returns the setpts filter that plays back at the given speed, or
+// "" for normal speed (speed <= 0 or 1.0). A 2x speed halves PTS, so the factor
+// is 1/speed.
+func setptsExpr(speed float64) string {
+	if speed <= 0 || speed == 1 {
+		return ""
+	}
+	return fmt.Sprintf("setpts=%.4f*PTS", 1/speed)
+}
+
+// filterChain builds the ordered geometry/motion filters for a video source:
+// crop, fps, scale, setpts (speed), reverse. Boomerang is NOT included here (it
+// needs graph structure - see videoGraph). fps and scale are always present.
+func filterChain(c VideoConfig) string {
+	parts := make([]string, 0, 5)
+	if s := cropExpr(c.Aspect); s != "" {
+		parts = append(parts, s)
+	}
+	parts = append(parts, fmt.Sprintf("fps=%d", c.FPS))
+	parts = append(parts, scaleChain(c.Width))
+	if s := setptsExpr(c.Speed); s != "" {
+		parts = append(parts, s)
+	}
+	if c.Reverse {
+		parts = append(parts, "reverse")
+	}
+	return strings.Join(parts, ",")
+}
+
+// videoGraph builds the -filter_complex value that reads [0:v], applies the
+// geometry/motion chain and optional boomerang (forward then reversed), and
+// exposes the processed frames as [v].
+func videoGraph(c VideoConfig) string {
+	chain := filterChain(c)
+	if c.Boomerang {
+		return fmt.Sprintf("[0:v]%s,split[a][b];[b]reverse[r];[a][r]concat=n=2:v=1[v]", chain)
+	}
+	return fmt.Sprintf("[0:v]%s[v]", chain)
+}
