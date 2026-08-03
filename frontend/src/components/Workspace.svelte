@@ -1,10 +1,9 @@
 <script lang="ts">
-  // The single unified screen: pick a video OR a set of images (SourcePanel),
-  // set the source-specific timing (VideoTiming / ImagesTiming) and the shared
-  // output options (added by later components), then convert and land on the
-  // result card. All the pure logic (request building, validation, estimate)
-  // lives in ../lib; this orchestrator wires the source/settings stores to the
-  // bound Go methods in ../lib/wails.
+  // The single unified screen, laid out as two panes: a fixed left STAGE
+  // (preview + source summary + the primary action) and a scrolling right
+  // PANEL of option cards. All pure logic (request building, validation,
+  // estimate) lives in ../lib; this orchestrator wires the source/settings
+  // stores to the bound Go methods in ../lib/wails.
   import { onDestroy } from "svelte";
   import { source } from "../lib/source";
   import { settings } from "../lib/settings";
@@ -64,7 +63,7 @@
   $: validationMessage = settingsValid($settings) ?? timingMessage;
   $: canConvert = !!src && !converting && !validationMessage;
 
-  // Live output-height and size-estimate derived from the source dims + settings.
+  // Live output-height and size-estimate from the source dims + settings.
   $: srcW = src && src.kind === "video" ? src.info.Width : src && src.kind === "images" ? (src.items[0]?.Width ?? 0) : 0;
   $: srcH = src && src.kind === "video" ? src.info.Height : src && src.kind === "images" ? (src.items[0]?.Height ?? 0) : 0;
   $: outHeight = outputHeight(srcW, srcH, $settings.aspect, $settings.width);
@@ -131,8 +130,6 @@
     if (result) RevealOutput(result.Path);
   }
 
-  // Back to the empty state for a fresh source; output options are intentionally
-  // kept so a user tuning settings across conversions is not surprised.
   function makeAnother() {
     source.set(null);
     result = null;
@@ -146,68 +143,96 @@
   });
 </script>
 
-<div class="workspace">
-  <SourcePanel />
+{#if !src}
+  <div class="body empty-body">
+    <SourcePanel />
+  </div>
+{:else}
+  <div class="body">
+    <!-- LEFT STAGE -->
+    <div class="stage">
+      <div class="preview-frame">
+        {#if result}
+          <span class="badge ok">done</span>
+          <img class="preview-img" src={previewUrl} alt="Converted preview" />
+        {:else if converting}
+          <span class="badge">encoding&hellip;</span>
+          <div class="preview-placeholder">Encoding your {formatLabel($settings.format)}&hellip;</div>
+        {:else}
+          <span class="badge">preview</span>
+          <div class="preview-placeholder">Your {formatLabel($settings.format)} preview appears here after you convert.</div>
+        {/if}
+      </div>
 
-  {#if src}
-    {#if src.kind === "video"}
-      <VideoTiming bind:startSec bind:endSec {durationSec} />
-    {:else}
-      <ImagesTiming />
-    {/if}
+      <SourcePanel />
 
-    <FormatPicker />
-    <SizeControls {outHeight} />
-    <PlaybackControls />
-    <QualityControls />
-    <OutputControls {displayEstimate} {estimateCapped} />
-
-    <div class="actions">
-      <button class="btn-primary" type="button" on:click={convert} disabled={!canConvert}>
-        {converting ? "Converting..." : `Make ${formatLabel($settings.format)}`}
-      </button>
-      {#if validationMessage}
-        <p class="hint">{validationMessage}</p>
+      {#if convertError}
+        <p class="error">{convertError}</p>
       {/if}
+
+      <div class="cta-wrap">
+        {#if result}
+          <div class="result-meta">
+            <span class="mono">{result.Width}x{result.Height}</span>
+            <span class="mono">{humanBytes(result.Bytes)}</span>
+          </div>
+          <div class="dz-actions">
+            <button class="btn ghost block sm" type="button" on:click={openFolder}>Open folder</button>
+            <button class="btn primary block sm" type="button" on:click={makeAnother}>Make another</button>
+          </div>
+        {:else if converting}
+          <div class="prog">
+            <div class="prog-track"><div class="prog-fill" style="width:{progressPercent}%"></div></div>
+            <div class="prog-row">
+              <span class="mono">{progressPercent}%</span>
+              <span class="prog-phase">{progressPhase}</span>
+              <button class="link" type="button" on:click={cancel}>Cancel</button>
+            </div>
+          </div>
+        {:else}
+          <div class="estimate-line">
+            <span>Estimated size</span>
+            <span class="estimate-val">
+              <b>~{humanBytes(displayEstimate)}</b>
+              {#if estimateCapped}
+                <span class="pill">capped</span>
+              {:else if $settings.targetMB > 0}
+                <span class="pill">fits {$settings.targetMB} MB</span>
+              {/if}
+            </span>
+          </div>
+          <button class="btn primary lg block" type="button" on:click={convert} disabled={!canConvert}>
+            Make {formatLabel($settings.format)}
+          </button>
+          {#if validationMessage}
+            <p class="hint">{validationMessage}</p>
+          {/if}
+        {/if}
+      </div>
     </div>
 
-    {#if converting}
-      <div class="progress">
-        <div class="progress-track">
-          <div class="progress-fill" style="width:{progressPercent}%"></div>
-        </div>
-        <div class="progress-row">
-          <span class="mono">{progressPercent}%</span>
-          <span class="progress-phase">{progressPhase}</span>
-          <button class="btn-ghost" type="button" on:click={cancel}>Cancel</button>
-        </div>
+    <!-- RIGHT OPTIONS -->
+    <div class="panel">
+      <div class="scroll">
+        {#if src.kind === "video"}
+          <VideoTiming bind:startSec bind:endSec {durationSec} />
+        {:else}
+          <ImagesTiming />
+        {/if}
+        <FormatPicker />
+        <SizeControls {outHeight} />
+        <PlaybackControls />
+        <QualityControls />
+        <OutputControls />
       </div>
-    {/if}
-
-    {#if convertError}
-      <p class="error">{convertError}</p>
-    {/if}
-
-    {#if result}
-      <section class="section result-card">
-        <img class="preview" src={previewUrl} alt="Converted preview" />
-        <div class="result-meta">
-          <span class="mono">{result.Width}x{result.Height}</span>
-          <span class="mono">{humanBytes(result.Bytes)}</span>
-        </div>
-        <div class="btn-row">
-          <button class="btn-ghost" type="button" on:click={openFolder}>Open folder</button>
-          <button class="btn-ghost" type="button" on:click={makeAnother}>Make another</button>
-        </div>
-      </section>
-    {/if}
-  {/if}
-</div>
+    </div>
+  </div>
+{/if}
 
 <style>
-  .workspace {
+  .estimate-val {
     display: flex;
-    flex-direction: column;
-    gap: 18px;
+    align-items: center;
+    gap: 8px;
   }
 </style>

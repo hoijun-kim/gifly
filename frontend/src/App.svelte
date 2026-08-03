@@ -6,7 +6,5 @@
 
 <div id="app">
   <TitleBar />
-  <main class="work">
-    <Workspace />
-  </main>
+  <Workspace />
 </div>
