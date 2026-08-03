@@ -27,7 +27,7 @@ func TestVideoConfigMapsRequest(t *testing.T) {
 	if int(c.Loop) != 0 { // "forever" -> 0
 		t.Errorf("loop forever should map to 0, got %d", int(c.Loop))
 	}
-	if c.Quality.MaxColors != 200 || !c.Quality.Dither {
+	if c.Quality.MaxColors != 200 || c.Quality.Dither != gifjob.DitherSierra {
 		t.Errorf("quality mapping wrong: %+v", c.Quality)
 	}
 }
@@ -50,7 +50,7 @@ func TestImagesConfigMapsRequest(t *testing.T) {
 	if int(c.Loop) != -1 { // "once" -> -1
 		t.Errorf("loop once should map to -1, got %d", int(c.Loop))
 	}
-	if c.Quality.MaxColors != 128 || c.Quality.Dither {
+	if c.Quality.MaxColors != 128 || c.Quality.Dither != gifjob.DitherNone {
 		t.Errorf("quality mapping wrong: %+v", c.Quality)
 	}
 }

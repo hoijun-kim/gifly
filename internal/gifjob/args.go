@@ -14,10 +14,7 @@ func secs(ms int64) string {
 }
 
 func ditherArg(q Quality) string {
-	if q.Dither {
-		return "sierra2_4a"
-	}
-	return "none"
+	return q.Dither.ffmpeg()
 }
 
 // scaleChain is the shared scale filter: force width, keep aspect, even height,

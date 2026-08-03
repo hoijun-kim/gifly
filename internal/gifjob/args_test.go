@@ -7,7 +7,7 @@ import (
 )
 
 func TestVideoArgsTwoPass(t *testing.T) {
-	c := VideoConfig{Input: "in.mp4", StartMS: 1000, EndMS: 3500, FPS: 15, Width: 480, Loop: LoopForever, Quality: Quality{MaxColors: 128, Dither: true}}
+	c := VideoConfig{Input: "in.mp4", StartMS: 1000, EndMS: 3500, FPS: 15, Width: 480, Loop: LoopForever, Quality: Quality{MaxColors: 128, Dither: DitherSierra}}
 	p1, p2 := VideoArgs(c, "pal.png", "out.gif")
 
 	want1 := []string{
@@ -29,7 +29,7 @@ func TestVideoArgsTwoPass(t *testing.T) {
 }
 
 func TestVideoArgsDitherOffAndLoopOnce(t *testing.T) {
-	c := VideoConfig{Input: "in.mp4", StartMS: 0, EndMS: 1000, FPS: 10, Width: 320, Loop: LoopOnce, Quality: Quality{MaxColors: 256, Dither: false}}
+	c := VideoConfig{Input: "in.mp4", StartMS: 0, EndMS: 1000, FPS: 10, Width: 320, Loop: LoopOnce, Quality: Quality{MaxColors: 256, Dither: DitherNone}}
 	_, p2 := VideoArgs(c, "pal.png", "out.gif")
 	joined := strings.Join(p2, " ")
 	if !strings.Contains(joined, "paletteuse=dither=none") {
@@ -41,7 +41,7 @@ func TestVideoArgsDitherOffAndLoopOnce(t *testing.T) {
 }
 
 func TestVideoArgsPositiveLoop(t *testing.T) {
-	c := VideoConfig{Input: "in.mp4", StartMS: 0, EndMS: 1000, FPS: 10, Width: 320, Loop: LoopMode(5), Quality: Quality{MaxColors: 256, Dither: true}}
+	c := VideoConfig{Input: "in.mp4", StartMS: 0, EndMS: 1000, FPS: 10, Width: 320, Loop: LoopMode(5), Quality: Quality{MaxColors: 256, Dither: DitherSierra}}
 	_, p2 := VideoArgs(c, "pal.png", "out.gif")
 	joined := strings.Join(p2, " ")
 	if !strings.Contains(joined, "-loop 5") {
@@ -50,7 +50,7 @@ func TestVideoArgsPositiveLoop(t *testing.T) {
 }
 
 func TestImagesArgsAndConcatList(t *testing.T) {
-	c := ImagesConfig{Inputs: []string{"a.png", "b.png"}, FrameMS: 100, Width: 400, Loop: 3, Quality: Quality{MaxColors: 256, Dither: true}}
+	c := ImagesConfig{Inputs: []string{"a.png", "b.png"}, FrameMS: 100, Width: 400, Loop: 3, Quality: Quality{MaxColors: 256, Dither: DitherSierra}}
 	p1, p2 := ImagesArgs(c, "list.txt", "pal.png", "out.gif")
 
 	want1 := []string{

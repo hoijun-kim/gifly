@@ -35,7 +35,11 @@ func parseLoop(s string) (gifjob.LoopMode, error) {
 }
 
 func quality(colors int, noDither bool) gifjob.Quality {
-	return gifjob.Quality{MaxColors: colors, Dither: !noDither}
+	d := gifjob.DitherSierra
+	if noDither {
+		d = gifjob.DitherNone
+	}
+	return gifjob.Quality{MaxColors: colors, Dither: d, WebPQuality: 75}
 }
 
 // imagesHeight picks the images canvas height: a positive -h override, else the
