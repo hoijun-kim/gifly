@@ -61,16 +61,14 @@ func runPasses(ctx context.Context, bin string, r Runner, passes [][]string, out
 }
 
 // normalizeVideo applies engine defaults that keep zero-value configs working:
-// an empty Format is GIF and a non-positive Speed is normal (1.0), clamped to 4.
+// an empty Format is GIF, a non-positive Speed is normal (1.0), and a non-positive
+// WebPQuality is 75. An out-of-range Speed is left as-is for Validate to reject.
 func normalizeVideo(c VideoConfig) VideoConfig {
 	if c.Format == "" {
 		c.Format = FormatGIF
 	}
 	if c.Speed <= 0 {
 		c.Speed = 1
-	}
-	if c.Speed > 4 {
-		c.Speed = 4
 	}
 	if c.Quality.WebPQuality <= 0 {
 		c.Quality.WebPQuality = 75

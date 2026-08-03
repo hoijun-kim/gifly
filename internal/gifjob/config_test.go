@@ -18,6 +18,7 @@ func TestVideoConfigValidate(t *testing.T) {
 		{"colors too low", VideoConfig{Input: "in.mp4", EndMS: 5000, FPS: 15, Width: 480, Quality: Quality{MaxColors: 1}}},
 		{"colors too high", VideoConfig{Input: "in.mp4", EndMS: 5000, FPS: 15, Width: 480, Quality: Quality{MaxColors: 300}}},
 		{"loop below once", VideoConfig{Input: "in.mp4", EndMS: 5000, FPS: 15, Width: 480, Loop: -2, Quality: DefaultQuality()}},
+		{"speed too high", VideoConfig{Input: "in.mp4", EndMS: 5000, FPS: 15, Width: 480, Speed: 9, Quality: DefaultQuality()}},
 	}
 	for _, b := range bad {
 		if err := b.c.Validate(); err == nil {
