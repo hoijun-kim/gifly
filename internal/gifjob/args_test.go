@@ -103,3 +103,38 @@ func TestNormalizeArgs(t *testing.T) {
 		t.Errorf("NormalizeArgs =\n%v\nwant\n%v", got, want)
 	}
 }
+
+func TestLoopArgs(t *testing.T) {
+	cases := []struct {
+		f    Format
+		loop LoopMode
+		flag string
+		val  string
+	}{
+		{FormatGIF, LoopForever, "-loop", "0"},
+		{FormatGIF, LoopOnce, "-loop", "-1"},
+		{FormatGIF, LoopMode(5), "-loop", "5"},
+		{FormatWebP, LoopForever, "-loop", "0"},
+		{FormatWebP, LoopOnce, "-loop", "1"}, // once is 1 for webp, not -1
+		{FormatWebP, LoopMode(5), "-loop", "5"},
+		{FormatAPNG, LoopForever, "-plays", "0"},
+		{FormatAPNG, LoopOnce, "-plays", "1"},
+		{FormatAPNG, LoopMode(3), "-plays", "3"},
+	}
+	for _, c := range cases {
+		flag, val := loopArgs(c.f, c.loop)
+		if flag != c.flag || val != c.val {
+			t.Errorf("loopArgs(%q,%d) = %q %q, want %q %q", c.f, int(c.loop), flag, val, c.flag, c.val)
+		}
+	}
+}
+
+func TestPaletteTails(t *testing.T) {
+	q := Quality{MaxColors: 128, Dither: DitherBayer}
+	if got := palettegenTail(q); got != "palettegen=max_colors=128:stats_mode=diff" {
+		t.Errorf("palettegenTail = %q", got)
+	}
+	if got := paletteuseTail(q); got != "paletteuse=dither=bayer" {
+		t.Errorf("paletteuseTail = %q", got)
+	}
+}

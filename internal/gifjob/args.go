@@ -107,3 +107,40 @@ func NormalizeArgs(input, output string, w, h int) []string {
 		w, h, w, h)
 	return []string{"-y", "-i", input, "-vf", vf, output}
 }
+
+// webpApngLoop maps the semantic loop mode to the integer libwebp/apng use:
+// forever is 0, once is 1 (one playback), and a positive count is itself. GIF
+// does not use this - GIF's -loop takes the LoopMode value directly (once = -1).
+func webpApngLoop(loop LoopMode) int {
+	if loop == LoopOnce {
+		return 1
+	}
+	if loop < 0 {
+		return 0
+	}
+	return int(loop)
+}
+
+// loopArgs returns the loop flag and value for a format. GIF and WebP use
+// -loop; APNG uses -plays. The GIF value is the LoopMode literal; WebP and APNG
+// translate once to 1.
+func loopArgs(f Format, loop LoopMode) (flag, val string) {
+	switch f {
+	case FormatWebP:
+		return "-loop", strconv.Itoa(webpApngLoop(loop))
+	case FormatAPNG:
+		return "-plays", strconv.Itoa(webpApngLoop(loop))
+	default: // GIF
+		return "-loop", strconv.Itoa(int(loop))
+	}
+}
+
+// palettegenTail is the palettegen filter with the configured color count.
+func palettegenTail(q Quality) string {
+	return fmt.Sprintf("palettegen=max_colors=%d:stats_mode=diff", q.MaxColors)
+}
+
+// paletteuseTail is the paletteuse filter with the configured dither method.
+func paletteuseTail(q Quality) string {
+	return "paletteuse=dither=" + q.Dither.ffmpeg()
+}
