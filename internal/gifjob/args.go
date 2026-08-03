@@ -3,6 +3,7 @@ package gifjob
 import (
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -13,64 +14,107 @@ func secs(ms int64) string {
 	return fmt.Sprintf("%.3f", float64(ms)/1000)
 }
 
-func ditherArg(q Quality) string {
-	if q.Dither {
-		return "sierra2_4a"
-	}
-	return "none"
-}
-
 // scaleChain is the shared scale filter: force width, keep aspect, even height,
 // lanczos resampling.
 func scaleChain(width int) string {
 	return fmt.Sprintf("scale=%d:-2:flags=lanczos", width)
 }
 
-func palettegen(width int, q Quality) string {
-	return scaleChain(width) + fmt.Sprintf(",palettegen=max_colors=%d:stats_mode=diff", q.MaxColors)
+// VideoArgs builds the ffmpeg passes for a video job. GIF is two passes
+// (palettegen then paletteuse); WebP and APNG are a single encode pass. -ss
+// before -i is a fast seek; -t (duration) avoids the -ss/-to origin ambiguity.
+// palettePath is used only by GIF. The config is assumed already validated.
+func VideoArgs(c VideoConfig, palettePath, outPath string) (passes [][]string) {
+	seek := []string{"-ss", secs(c.StartMS), "-t", secs(c.EndMS - c.StartMS)}
+	graph := videoGraph(c)
+
+	switch c.Format {
+	case FormatWebP:
+		flag, val := loopArgs(FormatWebP, c.Loop)
+		p := append([]string{"-y"}, seek...)
+		p = append(p, "-i", c.Input, "-filter_complex", graph, "-map", "[v]",
+			"-c:v", "libwebp_anim", flag, val, "-q:v", strconv.Itoa(c.Quality.WebPQuality), outPath)
+		return [][]string{p}
+	case FormatAPNG:
+		flag, val := loopArgs(FormatAPNG, c.Loop)
+		p := append([]string{"-y"}, seek...)
+		p = append(p, "-i", c.Input, "-filter_complex", graph, "-map", "[v]",
+			"-f", "apng", flag, val, outPath)
+		return [][]string{p}
+	default: // GIF
+		p1 := append([]string{"-y"}, seek...)
+		p1 = append(p1, "-i", c.Input,
+			"-filter_complex", graph+";[v]"+palettegenTail(c.Quality)+"[p]",
+			"-map", "[p]", palettePath)
+		flag, val := loopArgs(FormatGIF, c.Loop)
+		p2 := append([]string{"-y"}, seek...)
+		p2 = append(p2, "-i", c.Input, "-i", palettePath,
+			"-filter_complex", graph+";[v][1:v]"+paletteuseTail(c.Quality)+"[o]",
+			"-map", "[o]", flag, val, outPath)
+		return [][]string{p1, p2}
+	}
 }
 
-func paletteuse(width int, q Quality) string {
-	return scaleChain(width) + fmt.Sprintf("[x];[x][1:v]paletteuse=dither=%s", ditherArg(q))
+// frameOrder returns the play order of the normalized frames after applying
+// reverse (flip the sequence) then boomerang (append the sequence back minus
+// its last frame, so the turn-around frame is not duplicated). It never mutates
+// its input.
+func frameOrder(frames []string, reverse, boomerang bool) []string {
+	out := make([]string, len(frames))
+	copy(out, frames)
+	if reverse {
+		for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+			out[i], out[j] = out[j], out[i]
+		}
+	}
+	if boomerang && len(out) > 1 {
+		for i := len(out) - 2; i >= 0; i-- {
+			out = append(out, out[i])
+		}
+	}
+	return out
 }
 
-// VideoArgs builds the two ffmpeg passes for a video job. Pass 1 writes the
-// optimized palette; pass 2 encodes the GIF against it. -ss before -i is a fast
-// seek; -t (duration) avoids the -ss/-to origin ambiguity. The config is assumed
-// already validated.
-func VideoArgs(c VideoConfig, palettePath, outPath string) (pass1, pass2 []string) {
-	start := secs(c.StartMS)
-	dur := secs(c.EndMS - c.StartMS)
-	fps := strconv.Itoa(c.FPS)
-
-	pass1 = []string{
-		"-y", "-ss", start, "-t", dur, "-i", c.Input,
-		"-vf", "fps=" + fps + "," + palettegen(c.Width, c.Quality),
-		palettePath,
+// effectiveFrameMS scales the per-frame duration by playback speed (2x speed
+// halves each frame's on-screen time). speed <= 0 means normal. The result is
+// never below 1 ms.
+func effectiveFrameMS(frameMS int, speed float64) int {
+	if speed <= 0 {
+		return frameMS
 	}
-	pass2 = []string{
-		"-y", "-ss", start, "-t", dur, "-i", c.Input, "-i", palettePath,
-		"-lavfi", "fps=" + fps + "," + paletteuse(c.Width, c.Quality),
-		"-loop", strconv.Itoa(int(c.Loop)), outPath,
+	ms := int(math.Round(float64(frameMS) / speed))
+	if ms < 1 {
+		ms = 1
 	}
-	return pass1, pass2
+	return ms
 }
 
-// ImagesArgs builds the two ffmpeg passes for an images job, reading the ordered
-// frames through the concat demuxer (frame durations come from listPath, so no
-// fps filter is applied).
-func ImagesArgs(c ImagesConfig, listPath, palettePath, outPath string) (pass1, pass2 []string) {
-	pass1 = []string{
-		"-y", "-f", "concat", "-safe", "0", "-i", listPath,
-		"-vf", palettegen(c.Width, c.Quality),
-		palettePath,
+// ImagesArgs builds the ffmpeg passes for an images job reading the ordered,
+// pre-normalized frames through the concat demuxer. GIF is palettegen then
+// paletteuse; WebP and APNG are a single encode pass. Frame durations come from
+// listPath, so no fps filter is applied. palettePath is used only by GIF.
+func ImagesArgs(c ImagesConfig, listPath, palettePath, outPath string) (passes [][]string) {
+	in := []string{"-y", "-f", "concat", "-safe", "0", "-i", listPath}
+	clone := func() []string { return append([]string(nil), in...) }
+
+	switch c.Format {
+	case FormatWebP:
+		flag, val := loopArgs(FormatWebP, c.Loop)
+		p := append(clone(), "-c:v", "libwebp_anim", flag, val, "-q:v", strconv.Itoa(c.Quality.WebPQuality), outPath)
+		return [][]string{p}
+	case FormatAPNG:
+		flag, val := loopArgs(FormatAPNG, c.Loop)
+		p := append(clone(), "-f", "apng", flag, val, outPath)
+		return [][]string{p}
+	default: // GIF
+		p1 := append(clone(), "-vf", scaleChain(c.Width)+","+palettegenTail(c.Quality), palettePath)
+		flag, val := loopArgs(FormatGIF, c.Loop)
+		p2 := clone()
+		p2 = append(p2, "-i", palettePath,
+			"-lavfi", scaleChain(c.Width)+"[x];[x][1:v]"+paletteuseTail(c.Quality),
+			flag, val, outPath)
+		return [][]string{p1, p2}
 	}
-	pass2 = []string{
-		"-y", "-f", "concat", "-safe", "0", "-i", listPath, "-i", palettePath,
-		"-lavfi", paletteuse(c.Width, c.Quality),
-		"-loop", strconv.Itoa(int(c.Loop)), outPath,
-	}
-	return pass1, pass2
 }
 
 // escapeConcatPath escapes single quotes in a path for the ffmpeg concat demuxer.
@@ -109,4 +153,97 @@ func NormalizeArgs(input, output string, w, h int) []string {
 		"scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1",
 		w, h, w, h)
 	return []string{"-y", "-i", input, "-vf", vf, output}
+}
+
+// webpApngLoop maps the semantic loop mode to the integer libwebp/apng use:
+// forever is 0, once is 1 (one playback), and a positive count is itself. GIF
+// does not use this - GIF's -loop takes the LoopMode value directly (once = -1).
+func webpApngLoop(loop LoopMode) int {
+	if loop == LoopOnce {
+		return 1
+	}
+	if loop < 0 {
+		return 0
+	}
+	return int(loop)
+}
+
+// loopArgs returns the loop flag and value for a format. GIF and WebP use
+// -loop; APNG uses -plays. The GIF value is the LoopMode literal; WebP and APNG
+// translate once to 1.
+func loopArgs(f Format, loop LoopMode) (flag, val string) {
+	switch f {
+	case FormatWebP:
+		return "-loop", strconv.Itoa(webpApngLoop(loop))
+	case FormatAPNG:
+		return "-plays", strconv.Itoa(webpApngLoop(loop))
+	default: // GIF
+		return "-loop", strconv.Itoa(int(loop))
+	}
+}
+
+// palettegenTail is the palettegen filter with the configured color count.
+func palettegenTail(q Quality) string {
+	return fmt.Sprintf("palettegen=max_colors=%d:stats_mode=diff", q.MaxColors)
+}
+
+// paletteuseTail is the paletteuse filter with the configured dither method.
+func paletteuseTail(q Quality) string {
+	return "paletteuse=dither=" + q.Dither.ffmpeg()
+}
+
+// cropExpr returns the ffmpeg crop filter that center-crops the source to the
+// aspect ratio, or "" for AspectFree. ffmpeg centers the crop when x/y are
+// omitted.
+func cropExpr(a Aspect) string {
+	switch a {
+	case AspectSquare:
+		return "crop='min(iw,ih)':'min(iw,ih)'"
+	case AspectWide: // 16:9
+		return "crop='min(iw,ih*16/9)':'min(ih,iw*9/16)'"
+	case AspectTall: // 9:16
+		return "crop='min(iw,ih*9/16)':'min(ih,iw*16/9)'"
+	default:
+		return ""
+	}
+}
+
+// setptsExpr returns the setpts filter that plays back at the given speed, or
+// "" for normal speed (speed <= 0 or 1.0). A 2x speed halves PTS, so the factor
+// is 1/speed.
+func setptsExpr(speed float64) string {
+	if speed <= 0 || speed == 1 {
+		return ""
+	}
+	return fmt.Sprintf("setpts=%.4f*PTS", 1/speed)
+}
+
+// filterChain builds the ordered geometry/motion filters for a video source:
+// crop, fps, scale, setpts (speed), reverse. Boomerang is NOT included here (it
+// needs graph structure - see videoGraph). fps and scale are always present.
+func filterChain(c VideoConfig) string {
+	parts := make([]string, 0, 5)
+	if s := cropExpr(c.Aspect); s != "" {
+		parts = append(parts, s)
+	}
+	parts = append(parts, fmt.Sprintf("fps=%d", c.FPS))
+	parts = append(parts, scaleChain(c.Width))
+	if s := setptsExpr(c.Speed); s != "" {
+		parts = append(parts, s)
+	}
+	if c.Reverse {
+		parts = append(parts, "reverse")
+	}
+	return strings.Join(parts, ",")
+}
+
+// videoGraph builds the -filter_complex value that reads [0:v], applies the
+// geometry/motion chain and optional boomerang (forward then reversed), and
+// exposes the processed frames as [v].
+func videoGraph(c VideoConfig) string {
+	chain := filterChain(c)
+	if c.Boomerang {
+		return fmt.Sprintf("[0:v]%s,split[a][b];[b]reverse[r];[a][r]concat=n=2:v=1[v]", chain)
+	}
+	return fmt.Sprintf("[0:v]%s[v]", chain)
 }

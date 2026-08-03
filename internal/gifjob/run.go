@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	_ "image/gif"
+	_ "image/png"
 	"os"
 	"path/filepath"
 
@@ -20,55 +21,95 @@ type Runner interface {
 	Run(ctx context.Context, bin string, args []string, onProgress func(ffmpeg.Progress)) error
 }
 
-// statResult stats a finished GIF and reads its dimensions back with the
-// standard library, so a Result reports what was actually written.
-func statResult(path string) (Result, error) {
+// statResult stats a finished animation and reads its dimensions back with the
+// standard library. GIF and APNG decode; WebP cannot be decoded by the stdlib,
+// so when decoding fails or yields nothing the caller-supplied wantW/wantH
+// (computed from the config) are used instead.
+func statResult(path string, wantW, wantH int) (Result, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
 		return Result{}, fmt.Errorf("output not produced: %w", err)
 	}
-	res := Result{Path: path, Bytes: fi.Size()}
+	res := Result{Path: path, Bytes: fi.Size(), Width: wantW, Height: wantH}
 	if f, err := os.Open(path); err == nil {
 		defer f.Close()
-		if cfg, _, err := decodeConfig(f); err == nil {
+		if cfg, _, err := decodeConfig(f); err == nil && cfg.Width > 0 {
 			res.Width, res.Height = cfg.Width, cfg.Height
 		}
 	}
 	return res, nil
 }
 
-// RunVideo validates the config, runs the palette pass then the encode pass
-// against a temp palette file, cleans the palette up on every path, and stats
-// the result.
+// runPasses runs each pass in order. Only the last pass (the encode) receives
+// onProgress and, on failure, has its partial output removed.
+func runPasses(ctx context.Context, bin string, r Runner, passes [][]string, outPath string, onProgress func(ffmpeg.Progress)) error {
+	last := len(passes) - 1
+	for i, args := range passes {
+		var cb func(ffmpeg.Progress)
+		if i == last {
+			cb = onProgress
+		}
+		if err := r.Run(ctx, bin, args, cb); err != nil {
+			if i == last {
+				os.Remove(outPath)
+				return fmt.Errorf("encode pass: %w", err)
+			}
+			return fmt.Errorf("pass %d: %w", i+1, err)
+		}
+	}
+	return nil
+}
+
+// normalizeVideo applies engine defaults that keep zero-value configs working:
+// an empty Format is GIF, a non-positive Speed is normal (1.0), and a non-positive
+// WebPQuality is 75. An out-of-range Speed is left as-is for Validate to reject.
+func normalizeVideo(c VideoConfig) VideoConfig {
+	if c.Format == "" {
+		c.Format = FormatGIF
+	}
+	if c.Speed <= 0 {
+		c.Speed = 1
+	}
+	if c.Quality.WebPQuality <= 0 {
+		c.Quality.WebPQuality = 75
+	}
+	return c
+}
+
+// RunVideo validates the config, runs the format's passes (GIF also writes a
+// temp palette), removes a partial output on encode failure, and stats the
+// result.
 func RunVideo(ctx context.Context, tools ffmpeg.Paths, r Runner, c VideoConfig, outPath string, onProgress func(ffmpeg.Progress)) (Result, error) {
+	c = normalizeVideo(c)
 	if err := c.Validate(); err != nil {
 		return Result{}, err
 	}
-	palette, err := os.CreateTemp("", "gifly-*.png")
-	if err != nil {
+	var palettePath string
+	if c.Format == FormatGIF {
+		palette, err := os.CreateTemp("", "gifly-*.png")
+		if err != nil {
+			return Result{}, err
+		}
+		palettePath = palette.Name()
+		palette.Close()
+		defer os.Remove(palettePath)
+	}
+	if err := runPasses(ctx, tools.FFmpeg, r, VideoArgs(c, palettePath, outPath), outPath, onProgress); err != nil {
 		return Result{}, err
 	}
-	palettePath := palette.Name()
-	palette.Close()
-	defer os.Remove(palettePath)
-
-	p1, p2 := VideoArgs(c, palettePath, outPath)
-	if err := r.Run(ctx, tools.FFmpeg, p1, nil); err != nil {
-		return Result{}, fmt.Errorf("palette pass: %w", err)
-	}
-	if err := r.Run(ctx, tools.FFmpeg, p2, onProgress); err != nil {
-		os.Remove(outPath)
-		return Result{}, fmt.Errorf("encode pass: %w", err)
-	}
-	return statResult(outPath)
+	return statResult(outPath, c.Width, OutputHeight(c.SrcWidth, c.SrcHeight, c.Aspect, c.Width))
 }
 
-// RunImages validates the config, normalizes every input frame onto the shared
-// c.Width by c.Height canvas (so a mixed-size set becomes uniform for the concat
-// demuxer), then runs the palette and encode passes. All temp files live in one
-// directory removed on every exit path; a failed encode also removes the partial
-// output.
+// RunImages normalizes every input onto the shared canvas, applies the play
+// order (reverse/boomerang) and speed (per-frame duration), then runs the
+// format's passes. All temp files live in one directory removed on every exit.
 func RunImages(ctx context.Context, tools ffmpeg.Paths, r Runner, c ImagesConfig, outPath string, onProgress func(ffmpeg.Progress)) (Result, error) {
+	if c.Format == "" {
+		c.Format = FormatGIF
+	}
+	if c.Quality.WebPQuality <= 0 {
+		c.Quality.WebPQuality = 75
+	}
 	if err := c.Validate(); err != nil {
 		return Result{}, err
 	}
@@ -91,25 +132,24 @@ func RunImages(ctx context.Context, tools ffmpeg.Paths, r Runner, c ImagesConfig
 		norm[i] = out
 	}
 
+	ordered := frameOrder(norm, c.Reverse, c.Boomerang)
 	listPath := filepath.Join(tmp, "list.txt")
 	list, err := os.Create(listPath)
 	if err != nil {
 		return Result{}, err
 	}
-	if err := WriteConcatList(list, norm, c.FrameMS); err != nil {
+	if err := WriteConcatList(list, ordered, effectiveFrameMS(c.FrameMS, c.Speed)); err != nil {
 		list.Close()
 		return Result{}, err
 	}
 	list.Close()
 
-	palettePath := filepath.Join(tmp, "palette.png")
-	p1, p2 := ImagesArgs(c, listPath, palettePath, outPath)
-	if err := r.Run(ctx, tools.FFmpeg, p1, nil); err != nil {
-		return Result{}, fmt.Errorf("palette pass: %w", err)
+	var palettePath string
+	if c.Format == FormatGIF {
+		palettePath = filepath.Join(tmp, "palette.png")
 	}
-	if err := r.Run(ctx, tools.FFmpeg, p2, onProgress); err != nil {
-		os.Remove(outPath)
-		return Result{}, fmt.Errorf("encode pass: %w", err)
+	if err := runPasses(ctx, tools.FFmpeg, r, ImagesArgs(c, listPath, palettePath, outPath), outPath, onProgress); err != nil {
+		return Result{}, err
 	}
-	return statResult(outPath)
+	return statResult(outPath, c.Width, c.Height)
 }

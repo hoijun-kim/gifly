@@ -34,14 +34,33 @@ func TestParseLoop(t *testing.T) {
 	}
 }
 
-func TestImagesHeight(t *testing.T) {
-	// signature: imagesHeight(override, width, firstW, firstH int) int
-	// override <= 0 -> derive from the first frame via CanvasHeight
-	if got := imagesHeight(0, 800, 1600, 900); got != gifjob.CanvasHeight(1600, 900, 800) {
-		t.Errorf("imagesHeight(derive) = %d, want %d", got, gifjob.CanvasHeight(1600, 900, 800))
+func TestParseFormatAspectDither(t *testing.T) {
+	if f, err := parseFormat("webp"); err != nil || f != gifjob.FormatWebP {
+		t.Errorf("parseFormat(webp) = %v %v", f, err)
 	}
-	// positive override is used verbatim
-	if got := imagesHeight(500, 800, 1600, 900); got != 500 {
-		t.Errorf("imagesHeight(override) = %d, want 500", got)
+	if _, err := parseFormat("mp4"); err == nil {
+		t.Error("parseFormat(mp4) should error")
+	}
+	if a, err := parseAspect("16:9"); err != nil || a != gifjob.AspectWide {
+		t.Errorf("parseAspect(16:9) = %v %v", a, err)
+	}
+	if a, err := parseAspect("free"); err != nil || a != gifjob.AspectFree {
+		t.Errorf("parseAspect(free) = %v %v", a, err)
+	}
+	if d, err := parseDither("floyd"); err != nil || d != gifjob.DitherFloyd {
+		t.Errorf("parseDither(floyd) = %v %v", d, err)
+	}
+}
+
+func TestDefaultOut(t *testing.T) {
+	// A caller-set output keeps its name; the default name follows the format.
+	if got := defaultOut("out.gif", gifjob.FormatWebP); got != "out.webp" {
+		t.Errorf("defaultOut(out.gif, webp) = %q, want out.webp", got)
+	}
+	if got := defaultOut("mine.gif", gifjob.FormatGIF); got != "mine.gif" {
+		t.Errorf("defaultOut(mine.gif, gif) = %q, want mine.gif", got)
+	}
+	if got := defaultOut("out.gif", gifjob.FormatAPNG); got != "out.png" {
+		t.Errorf("defaultOut(out.gif, apng) = %q, want out.png", got)
 	}
 }

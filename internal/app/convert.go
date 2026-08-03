@@ -118,6 +118,15 @@ func nextFitWidth(w int) int {
 	return n
 }
 
+// ditherFromBool maps the current boolean dither request onto the engine's
+// dither method (Plan 5 will replace this with a real method selector).
+func ditherFromBool(on bool) gifjob.DitherMethod {
+	if on {
+		return gifjob.DitherSierra
+	}
+	return gifjob.DitherNone
+}
+
 // videoConfig maps a VideoRequest to a gifjob.VideoConfig.
 func videoConfig(req VideoRequest) gifjob.VideoConfig {
 	return gifjob.VideoConfig{
@@ -128,9 +137,12 @@ func videoConfig(req VideoRequest) gifjob.VideoConfig {
 		Width:   req.Width,
 		Loop:    parseLoopMode(req.Loop),
 		Quality: gifjob.Quality{
-			MaxColors: req.Colors,
-			Dither:    req.Dither,
+			MaxColors:   req.Colors,
+			Dither:      ditherFromBool(req.Dither),
+			WebPQuality: 75,
 		},
+		Format: gifjob.FormatGIF,
+		Speed:  1,
 	}
 }
 
@@ -144,9 +156,12 @@ func imagesConfig(req ImagesRequest, height int) gifjob.ImagesConfig {
 		Height:  height,
 		Loop:    parseLoopMode(req.Loop),
 		Quality: gifjob.Quality{
-			MaxColors: req.Colors,
-			Dither:    req.Dither,
+			MaxColors:   req.Colors,
+			Dither:      ditherFromBool(req.Dither),
+			WebPQuality: 75,
 		},
+		Format: gifjob.FormatGIF,
+		Speed:  1,
 	}
 }
 

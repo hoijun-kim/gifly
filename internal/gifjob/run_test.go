@@ -178,3 +178,24 @@ func TestRunImagesRemovesPartialOutputOnFailure(t *testing.T) {
 		t.Errorf("partial output %q was left behind after a failed encode", out)
 	}
 }
+
+func TestRunVideoWebPIsSinglePass(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "out.webp")
+	r := &fakeRunner{out: out, writeOn: 1} // single pass writes the output
+	tools := ffmpeg.Paths{FFmpeg: "ffmpeg", FFprobe: "ffprobe"}
+	c := VideoConfig{Input: "in.mp4", StartMS: 0, EndMS: 2000, FPS: 12, Width: 320, Loop: LoopForever, Format: FormatWebP, SrcWidth: 640, SrcHeight: 360, Quality: DefaultQuality()}
+	before := giflyTempFiles(t)
+	res, err := RunVideo(context.Background(), tools, r, c, out, nil)
+	if err != nil {
+		t.Fatalf("RunVideo webp = %v", err)
+	}
+	if len(r.calls) != 1 {
+		t.Fatalf("WebP must be a single ffmpeg pass, got %d", len(r.calls))
+	}
+	// WebP cannot be decoded by the stdlib, so dimensions fall back to the
+	// config: width 320, height OutputHeight(640,360,free,320)=180.
+	if res.Width != 320 || res.Height != 180 {
+		t.Errorf("webp result dims = %dx%d, want 320x180 (fallback)", res.Width, res.Height)
+	}
+	assertNoNewGiflyTempFiles(t, before) // no palette temp for webp
+}
