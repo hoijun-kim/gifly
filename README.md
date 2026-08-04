@@ -3,6 +3,11 @@
 **[hoijun-kim.github.io/gifly](https://hoijun-kim.github.io/gifly/)** ·
 [Releases](https://github.com/hoijun-kim/gifly/releases)
 
+![release](https://img.shields.io/github/v/release/hoijun-kim/gifly?color=8b5cf6)
+![downloads](https://img.shields.io/github/downloads/hoijun-kim/gifly/total?color=8b5cf6)
+![platform](https://img.shields.io/badge/platform-Windows-0078D6)
+![license](https://img.shields.io/badge/license-PolyForm%20NC%201.0.0-blue)
+
 Drop in a video or a set of images. Trim or reorder, pick a size, aspect,
 speed, loop and dither, then export a **GIF, WebP or APNG** - with a live size
 estimate and an optional target-size fit - and copy it straight to your
@@ -10,6 +15,8 @@ clipboard.
 
 Windows only. No installer, no runtime dependencies, no cgo. gifly does the
 timing and options; a bundled [FFmpeg](https://ffmpeg.org) does the encoding.
+
+![gifly](docs/screenshot.png)
 
 ## Get gifly
 
