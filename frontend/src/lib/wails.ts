@@ -13,6 +13,7 @@ import {
 } from "../../wailsjs/go/app/App";
 import type { app } from "../../wailsjs/go/models";
 import {
+  BrowserOpenURL as BrowserOpenURLRuntime,
   EventsOn,
   Quit as QuitRuntime,
   WindowMinimise as WindowMinimiseRuntime,
@@ -47,6 +48,7 @@ export const CopyOutput = CopyOutputBinding;
 // Wails JS runtime - only the pieces the shell and modes need.
 export const WindowMinimise = WindowMinimiseRuntime;
 export const Quit = QuitRuntime;
+export const BrowserOpenURL = BrowserOpenURLRuntime;
 
 /**
  * Subscribes to conversion progress events. Returns an unsubscribe function
