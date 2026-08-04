@@ -4,8 +4,12 @@
   import TitleBar from "./components/TitleBar.svelte";
   import Workspace from "./components/Workspace.svelte";
   import { initPersistence } from "./lib/persist";
+  import { initTheme } from "./lib/theme";
 
-  onMount(initPersistence);
+  onMount(() => {
+    initTheme();
+    initPersistence();
+  });
 </script>
 
 <div id="app">

@@ -4,6 +4,7 @@
   // the Wails JS runtime directly (WindowMinimise/Quit) rather than a Go
   // round-trip - there is no in-flight state here that needs to veto a close.
   import { Quit, WindowMinimise } from "../lib/wails";
+  import { theme, toggleTheme } from "../lib/theme";
   import About from "./About.svelte";
 
   let showAbout = false;
@@ -18,6 +19,23 @@
     <span class="wordmark-text">gifly</span>
   </span>
   <div class="controls" style="--wails-draggable:no-drag">
+    <button class="ctrl-btn" type="button" on:click={toggleTheme} aria-label="Toggle light or dark theme" title="Toggle light/dark">
+      {#if $theme === "dark"}
+        <svg viewBox="0 0 12 12" aria-hidden="true">
+          <circle cx="6" cy="6" r="2.4" fill="none" stroke="currentColor" stroke-width="1.1" />
+          <g stroke="currentColor" stroke-width="1.1" stroke-linecap="round">
+            <line x1="6" y1="0.8" x2="6" y2="2" /><line x1="6" y1="10" x2="6" y2="11.2" />
+            <line x1="0.8" y1="6" x2="2" y2="6" /><line x1="10" y1="6" x2="11.2" y2="6" />
+            <line x1="2.3" y1="2.3" x2="3.1" y2="3.1" /><line x1="8.9" y1="8.9" x2="9.7" y2="9.7" />
+            <line x1="9.7" y1="2.3" x2="8.9" y2="3.1" /><line x1="3.1" y1="8.9" x2="2.3" y2="9.7" />
+          </g>
+        </svg>
+      {:else}
+        <svg viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M9.3 7.4A4 4 0 1 1 4.6 2.7 3.2 3.2 0 0 0 9.3 7.4Z" fill="currentColor" />
+        </svg>
+      {/if}
+    </button>
     <button class="ctrl-btn" type="button" on:click={() => (showAbout = true)} aria-label="About gifly" title="About gifly">
       <svg viewBox="0 0 12 12" aria-hidden="true">
         <circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" stroke-width="1.1" />
