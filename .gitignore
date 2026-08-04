@@ -4,3 +4,4 @@ giflycli.exe
 frontend/node_modules/
 frontend/dist/
 build/bin/
+internal/ffmpeg/bin/

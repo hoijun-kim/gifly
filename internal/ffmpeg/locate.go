@@ -18,8 +18,11 @@ type Paths struct {
 
 // resolveDir returns the directory the bundled binaries live in. Preference,
 // highest first: the GIFLY_FFMPEG_DIR override (used in development and tests),
-// then an "ffmpeg" folder beside the running executable (how a release ships).
-// It returns the first directory that actually contains ffmpeg.exe.
+// then the binaries embedded in the executable (the self-contained "standalone"
+// build, which extracts them to a cache dir on first use - a no-op in the normal
+// build), then an "ffmpeg" folder beside the running executable (how the zipped
+// release ships). It returns the first directory that actually contains
+// ffmpeg.exe.
 func resolveDir() (string, error) {
 	var tried []string
 	consider := func(dir string) (string, bool) {
@@ -35,6 +38,11 @@ func resolveDir() (string, error) {
 
 	if dir, ok := consider(os.Getenv("GIFLY_FFMPEG_DIR")); ok {
 		return dir, nil
+	}
+	if d, err := embeddedDir(); err == nil {
+		if dir, ok := consider(d); ok {
+			return dir, nil
+		}
 	}
 	if exe, err := os.Executable(); err == nil {
 		if dir, ok := consider(filepath.Join(filepath.Dir(exe), "ffmpeg")); ok {
