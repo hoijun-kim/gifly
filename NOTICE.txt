@@ -1,0 +1,35 @@
+gifly - third-party notices
+===========================
+
+gifly bundles FFmpeg (https://ffmpeg.org). FFmpeg is used unmodified, as
+separate executables (ffmpeg.exe, ffprobe.exe): gifly does not link FFmpeg into
+its own binary - it runs it as an external process. In the single-file
+("standalone") build the same unmodified executables are carried inside gifly
+and written to disk on first run.
+
+FFmpeg is licensed under the GNU Lesser General Public License, version 3
+(LGPL-3.0). The full license text is in THIRD-PARTY-LICENSES/ffmpeg-LICENSE.txt.
+
+Bundled build
+-------------
+FFmpeg N-125881-g946272b79a-20260801, Windows x64 LGPL build from the
+BtbN/FFmpeg-Builds project (https://github.com/BtbN/FFmpeg-Builds).
+
+Source code
+-----------
+FFmpeg source is available from https://ffmpeg.org/download.html and, for this
+exact build, from https://github.com/BtbN/FFmpeg-Builds .
+
+Replacing FFmpeg
+----------------
+As LGPL requires, you can use your own FFmpeg. gifly looks for it in this order:
+
+  1. the GIFLY_FFMPEG_DIR environment variable (a folder holding ffmpeg.exe and
+     ffprobe.exe),
+  2. an "ffmpeg" folder next to gifly.exe (the zip build),
+  3. FFmpeg on your PATH.
+
+In the zip build, replace the files in the ffmpeg/ folder with another
+LGPL-compatible FFmpeg build. The standalone build extracts its copy to
+%LOCALAPPDATA%\gifly\ffmpeg-<id>\ and still honours GIFLY_FFMPEG_DIR and PATH
+first, so you can point it at a different build.
